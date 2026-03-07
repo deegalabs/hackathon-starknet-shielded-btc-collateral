@@ -88,8 +88,10 @@ export default function Vault() {
 
   const handleDeposit = async () => {
     const sats = btcToSats(depositAmount);
-    if (sats <= 0n || !commitment) return;
-    await deposit(sats, commitment);
+    const secretBigInt = secret ? BigInt(secret) : null;
+    if (sats <= 0n || !commitment || !secretBigInt) return;
+    // On-chain Poseidon validation: pass secret so Cairo verifies compute_commitment(amount, secret) == commitment
+    await deposit(sats, secretBigInt, commitment);
   };
 
   /**

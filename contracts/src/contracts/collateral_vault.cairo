@@ -16,12 +16,17 @@
 ///   - withdraw verifies Poseidon preimage on-chain
 ///   - No amount is ever stored or emitted in plaintext
 ///
+/// On-chain Poseidon validation (March 8, 2026):
+///   - deposit() validates commitment on-chain: Poseidon(amount, secret) == commitment
+///   - Removes trust assumption on frontend hash computation
+///   - MVP trade-off: secret visible in calldata; production would use ZK proof
+///
 /// Production upgrade path (Phase 2):
 ///   - Replace StubProofVerifier with RangeProofVerifier
 ///   - Call set_verifier(new_verifier) — zero downtime upgrade
 ///   - prove_collateral will delegate to the on-chain STARK verifier
 ///
-/// Security audit: SECURITY.md (v2.0, H-07 fix applied)
+/// Security audit: SECURITY.md (v3.0, H-07 fix applied)
 /// Admin interface: ICollateralVaultAdmin
 #[starknet::contract]
 pub mod CollateralVault {
@@ -139,21 +144,30 @@ pub mod CollateralVault {
 
     #[abi(embed_v0)]
     impl CollateralVaultImpl of shielded_btc_collateral::interfaces::icollateral_vault::ICollateralVault<ContractState> {
-        /// Deposit WBTC privately.
+        /// Deposit WBTC privately with on-chain Poseidon commitment validation.
         ///
         /// Steps:
-        ///   1. Transfer `amount` WBTC from caller to this vault.
-        ///   2. Store `commitment` (hides the amount) mapped to the caller.
-        ///   3. Emit Deposited event (commitment only — no amount disclosed).
+        ///   1. Validate commitment on-chain: Poseidon(amount_low, amount_high, secret) == commitment
+        ///   2. Transfer `amount` WBTC from caller to this vault.
+        ///   3. Store `commitment` (hides the amount) mapped to the caller.
+        ///   4. Emit Deposited event (commitment only — no amount disclosed).
         ///
         /// The caller must approve this contract for at least `amount` WBTC before calling.
-        /// commitment = Poseidon(amount_low, amount_high, secret) — computed off-chain.
+        ///
+        /// On-chain validation (March 8, 2026):
+        ///   The commitment is verified cryptographically using Cairo's native Poseidon hash.
+        ///   This removes the trust assumption on frontend hash computation.
+        ///   MVP note: `secret` is visible in calldata. Production would use a ZK proof.
         ///
         /// [H-07 Fix] Amount is NOT stored in plaintext. Only the Poseidon commitment is kept.
-        fn deposit(ref self: ContractState, amount: u256, commitment: felt252) {
+        fn deposit(ref self: ContractState, amount: u256, secret: felt252, commitment: felt252) {
             assert(!self.paused.read(), 'Vault is paused');
             assert(amount > 0_u256, 'Amount must be positive');
             assert(commitment != 0, 'Commitment cannot be zero');
+
+            // On-chain Poseidon preimage validation: no trust in frontend computation.
+            let computed = InternalImpl::compute_commitment(amount, secret);
+            assert(computed == commitment, 'Invalid commitment');
 
             let caller = get_caller_address();
 

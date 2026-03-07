@@ -5,7 +5,9 @@
 // - prove_collateral: added `proof` parameter (ZK proof span, empty for stub verifier)
 // - get_committed_amount: REMOVED (privacy-preserving, amounts no longer stored on-chain)
 export const VAULT_ABI = [
-  { type: "function", name: "deposit", inputs: [{ name: "amount", type: "core::integer::u256" }, { name: "commitment", type: "core::felt252" }], outputs: [], state_mutability: "external" },
+  // deposit: on-chain Poseidon validation (March 8, 2026)
+  // Contract validates: compute_commitment(amount, secret) == commitment
+  { type: "function", name: "deposit", inputs: [{ name: "amount", type: "core::integer::u256" }, { name: "secret", type: "core::felt252" }, { name: "commitment", type: "core::felt252" }], outputs: [], state_mutability: "external" },
   {
     type: "function", name: "withdraw",
     inputs: [

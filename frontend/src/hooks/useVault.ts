@@ -85,8 +85,13 @@ export function useVault() {
     refresh();
   }, [refresh]);
 
+  /**
+   * Deposit WBTC with on-chain Poseidon commitment validation.
+   * The contract validates: compute_commitment(amount, secret) == commitment
+   * This removes trust in frontend hash computation — the Cairo contract enforces it.
+   */
   const deposit = useCallback(
-    async (amount: bigint, commitment: bigint) => {
+    async (amount: bigint, secret: bigint, commitment: bigint) => {
       if (!account || !contracts.vault || !contracts.wbtc) return;
       setTx({ status: "pending", hash: null, message: "Approving WBTC..." });
       try {
@@ -97,9 +102,10 @@ export function useVault() {
         await provider.waitForTransaction(approveTx.transaction_hash);
         setTx({ status: "pending", hash: approveTx.transaction_hash, message: "Depositing..." });
 
+        // On-chain validation: secret + commitment passed so Cairo can verify Poseidon(amount, secret) == commitment
         const depositTx = await contracts.vault.invoke(
           "deposit",
-          [cairo.uint256(amount), `0x${commitment.toString(16)}`],
+          [cairo.uint256(amount), `0x${secret.toString(16)}`, `0x${commitment.toString(16)}`],
         );
         await provider.waitForTransaction(depositTx.transaction_hash);
         setTx({ status: "success", hash: depositTx.transaction_hash, message: "Deposit confirmed!" });

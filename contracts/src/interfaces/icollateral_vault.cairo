@@ -8,13 +8,26 @@ use starknet::ContractAddress;
 ///   - `prove_collateral` now accepts a ZK `proof` parameter
 ///   - `withdraw` now requires the deposit `secret` for preimage verification
 ///   - `get_committed_amount` REMOVED (privacy-preserving: amounts not stored)
+///
+/// [On-chain Poseidon validation — March 8, 2026]
+///   - `deposit` now accepts `secret` and validates commitment on-chain:
+///     compute_commitment(amount, secret) == commitment
+///   - Removes trust assumption on frontend computation
+///   - MVP note: `secret` is in calldata (visible on-chain); production would
+///     use a ZK proof to avoid this. Acknowledged trade-off for MVP scope.
 #[starknet::interface]
 pub trait ICollateralVault<TContractState> {
     /// Deposit WBTC privately.
     /// The actual amount is hidden behind a Poseidon commitment.
-    /// commitment = Poseidon(amount_low, amount_high, secret)
-    /// Reverts if the caller already has an active commitment (H-01 fix).
-    fn deposit(ref self: TContractState, amount: u256, commitment: felt252);
+    ///
+    /// On-chain validates: Poseidon(amount_low, amount_high, secret) == commitment
+    /// This enforces commitment integrity without relying on frontend computation.
+    ///
+    /// MVP note: `secret` is visible in calldata. In production this would be
+    /// replaced by a ZK proof of commitment correctness.
+    ///
+    /// Reverts if: amount == 0, commitment == 0, invalid preimage, or active commitment exists.
+    fn deposit(ref self: TContractState, amount: u256, secret: felt252, commitment: felt252);
 
     /// Prove that a user's committed collateral meets or exceeds a threshold.
     ///

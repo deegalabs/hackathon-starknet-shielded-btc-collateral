@@ -306,8 +306,11 @@ async function main() {
   row("    commitment = Poseidon(amt, secret)", commitment);
   console.log("  💡  Only the commitment hash goes on-chain. Amount is hidden!");
 
+  // On-chain Poseidon validation: deposit now requires secret for on-chain commitment check.
+  // Contract validates: compute_commitment(amount, secret) == commitment (no frontend trust).
   const depositResp = await vault.invoke("deposit", [
     cairo.uint256(DEPOSIT_AMOUNT),
+    SECRET,         // secret — for on-chain commitment validation
     commitment,
   ]);
   await tx(provider, depositResp.transaction_hash, "Deposit");

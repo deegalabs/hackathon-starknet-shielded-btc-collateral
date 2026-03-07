@@ -134,7 +134,7 @@ fn test_private_deposit_enables_lending() {
     fund_and_approve(wbtc, vault_addr, alice(), deposit_amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(deposit_amount, commitment);
+    vault.deposit(deposit_amount, secret, commitment);
     stop_cheat_caller_address(vault_addr);
 
     // Borrow: stub verifier returns true (commitment != 0), loan approved
@@ -160,12 +160,13 @@ fn test_borrow_limit_privacy_preserving() {
     let lending = ILendingProtocolDispatcher { contract_address: lending_addr };
 
     let deposit_amount = 10_00000000_u256;
-    let commitment = make_commitment(deposit_amount, 0xFACE_felt252);
+    let secret_face = 0xFACE_felt252;
+    let commitment = make_commitment(deposit_amount, secret_face);
 
     fund_and_approve(wbtc, vault_addr, alice(), deposit_amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(deposit_amount, commitment);
+    vault.deposit(deposit_amount, secret_face, commitment);
     stop_cheat_caller_address(vault_addr);
 
     // [H-07 Fix] get_borrow_limit returns 0 — no amount is exposed.
@@ -184,11 +185,12 @@ fn test_repay_reduces_debt() {
     let lending = ILendingProtocolDispatcher { contract_address: lending_addr };
 
     let deposit_amount = 10_00000000_u256;
-    let commitment = make_commitment(deposit_amount, 0xabc_felt252);
+    let secret_abc = 0xabc_felt252;
+    let commitment = make_commitment(deposit_amount, secret_abc);
 
     fund_and_approve(wbtc, vault_addr, alice(), deposit_amount);
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(deposit_amount, commitment);
+    vault.deposit(deposit_amount, secret_abc, commitment);
     stop_cheat_caller_address(vault_addr);
 
     start_cheat_caller_address(lending_addr, alice());
@@ -223,12 +225,13 @@ fn test_stub_allows_any_depositor_to_borrow() {
 
     // Alice only deposits 1 BTC
     let deposit_amount = 1_00000000_u256;
-    let commitment = make_commitment(deposit_amount, 0xBAD_felt252);
+    let secret_bad = 0xBAD_felt252;
+    let commitment = make_commitment(deposit_amount, secret_bad);
 
     fund_and_approve(wbtc, vault_addr, alice(), deposit_amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(deposit_amount, commitment);
+    vault.deposit(deposit_amount, secret_bad, commitment);
     stop_cheat_caller_address(vault_addr);
 
     // Stub behavior: commitment != 0 → collateral proof passes regardless of threshold.
@@ -262,11 +265,12 @@ fn test_paymaster_eligible_user_with_collateral() {
     stop_cheat_caller_address(paymaster_addr);
 
     let deposit_amount = 5_00000000_u256;
-    let commitment = make_commitment(deposit_amount, 0xDAD_felt252);
+    let secret_dad = 0xDAD_felt252;
+    let commitment = make_commitment(deposit_amount, secret_dad);
     fund_and_approve(wbtc, vault_addr, alice(), deposit_amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(deposit_amount, commitment);
+    vault.deposit(deposit_amount, secret_dad, commitment);
     stop_cheat_caller_address(vault_addr);
 
     assert(paymaster.is_eligible_for_sponsorship(alice()), 'Alice should be eligible');
@@ -299,11 +303,12 @@ fn test_paymaster_ineligible_when_budget_empty() {
     let paymaster = IPaymasterDispatcher { contract_address: paymaster_addr };
 
     let deposit_amount = 5_00000000_u256;
-    let commitment = make_commitment(deposit_amount, 0xCAB_felt252);
+    let secret_cab = 0xCAB_felt252;
+    let commitment = make_commitment(deposit_amount, secret_cab);
     fund_and_approve(wbtc, vault_addr, alice(), deposit_amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(deposit_amount, commitment);
+    vault.deposit(deposit_amount, secret_cab, commitment);
     stop_cheat_caller_address(vault_addr);
 
     assert(!paymaster.is_eligible_for_sponsorship(alice()), 'Not eligible: no budget');
@@ -343,11 +348,12 @@ fn test_ltv_ceiling_prevents_undercollateralized_micro_loans() {
     let lending = ILendingProtocolDispatcher { contract_address: lending_addr };
 
     let deposit_amount = 1_u256;
-    let commitment = make_commitment(deposit_amount, 0x1_felt252);
+    let secret_one = 0x1_felt252;
+    let commitment = make_commitment(deposit_amount, secret_one);
     fund_and_approve(wbtc, vault_addr, alice(), deposit_amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(deposit_amount, commitment);
+    vault.deposit(deposit_amount, secret_one, commitment);
     stop_cheat_caller_address(vault_addr);
 
     // [H-07 Fix] get_borrow_limit returns 0 (privacy-preserving)
@@ -384,7 +390,7 @@ fn test_full_privacy_flow_deposit_prove_borrow_repay_withdraw() {
 
     fund_and_approve(wbtc, vault_addr, alice(), deposit);
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(deposit, commitment);
+    vault.deposit(deposit, secret, commitment);
     stop_cheat_caller_address(vault_addr);
 
     assert(vault.get_total_locked() == deposit, 'Vault should hold 10 BTC');
