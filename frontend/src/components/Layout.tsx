@@ -6,14 +6,17 @@ import {
   Zap,
   KeyRound,
   Shield,
+  UserCheck,
   ExternalLink,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { WalletButton } from "./WalletButton";
+import { useWallet } from "@/context/WalletContext";
 import { NETWORK, NETWORK_LABELS } from "@/lib/config";
 
 const NAV_ITEMS = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard", end: true },
+  { to: "/account", icon: UserCheck, label: "My Account" },
   { to: "/vault", icon: Vault, label: "Vault" },
   { to: "/lending", icon: TrendingUp, label: "Lending" },
   { to: "/paymaster", icon: Zap, label: "Paymaster" },
@@ -21,6 +24,7 @@ const NAV_ITEMS = [
 ];
 
 export function Layout() {
+  const { connectMethod } = useWallet();
   return (
     <div className="min-h-screen bg-background text-white flex">
       {/* Sidebar */}
@@ -61,6 +65,18 @@ export function Layout() {
             </NavLink>
           ))}
         </nav>
+
+        {/* ShieldedAccount active badge */}
+        {connectMethod === "shielded" && (
+          <div className="px-4 pb-2">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-privacy/10 border border-privacy/30">
+              <Shield size={12} className="text-privacy" />
+              <span className="text-xs text-privacy font-medium">
+                ShieldedAccount active
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Network badge */}
         <div className="px-4 py-4 border-t border-border">

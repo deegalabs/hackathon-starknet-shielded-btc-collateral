@@ -11,6 +11,14 @@ export const CONTRACTS = {
     (import.meta.env.VITE_SESSION_KEY_MANAGER_ADDRESS as string) || "",
 } as const;
 
+/**
+ * Class hash of the declared ShieldedAccount Cairo contract.
+ * Run `scarb build` then `sncast declare` to get this value.
+ * Set VITE_SHIELDED_ACCOUNT_CLASS_HASH in .env
+ */
+export const SHIELDED_ACCOUNT_CLASS_HASH =
+  (import.meta.env.VITE_SHIELDED_ACCOUNT_CLASS_HASH as string) || "";
+
 export const NETWORK_LABELS: Record<string, string> = {
   devnet: "Local Devnet",
   sepolia: "Starknet Sepolia",

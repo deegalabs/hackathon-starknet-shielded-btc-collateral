@@ -18,7 +18,7 @@ import {
   SESSION_KEY_MANAGER_ABI,
 } from "@/lib/abis";
 
-export type ConnectMethod = "extension" | "email" | null;
+export type ConnectMethod = "extension" | "email" | "shielded" | null;
 
 interface WalletContextType {
   account: AccountInterface | null;
@@ -39,6 +39,11 @@ interface WalletContextType {
   connectExtension: () => Promise<void>;
   /** Connect via email / passkey using Argent Web Wallet (no install needed) */
   connectEmail: () => Promise<void>;
+  /**
+   * Switch the active account to a deployed ShieldedAccount.
+   * Called by AccountSetup after a successful deploy.
+   */
+  switchToShieldedAccount: (account: AccountInterface, address: string) => void;
   disconnect: () => Promise<void>;
 }
 
@@ -55,6 +60,7 @@ const WalletContext = createContext<WalletContextType>({
   contracts: { vault: null, wbtc: null, lending: null, paymaster: null, skm: null },
   connectExtension: async () => {},
   connectEmail: async () => {},
+  switchToShieldedAccount: () => {},
   disconnect: async () => {},
 });
 
@@ -138,6 +144,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /**
+   * Called by AccountSetup after deploying a ShieldedAccount.
+   * Replaces the active account so all hooks (useVault, useLending, …) use
+   * the protocol-native smart contract account from this point on.
+   */
+  const switchToShieldedAccount = useCallback(
+    (shieldedAcc: AccountInterface, shieldedAddr: string) => {
+      setAccount(shieldedAcc);
+      setAddress(shieldedAddr);
+      setWalletName("ShieldedAccount");
+      setConnectMethod("shielded");
+    },
+    [],
+  );
+
   const handleDisconnect = useCallback(async () => {
     try {
       await getStarknetDisconnect({ clearLastWallet: true });
@@ -182,6 +203,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         contracts,
         connectExtension,
         connectEmail,
+        switchToShieldedAccount,
         disconnect: handleDisconnect,
       }}
     >
