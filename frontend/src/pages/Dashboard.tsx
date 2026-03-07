@@ -13,7 +13,8 @@ export default function Dashboard() {
   const { state: lending } = useLending();
   const { state: paymaster } = usePaymaster();
 
-  const hasDeposit = vault.committedAmount > 0n;
+  // [H-07 Fix] Deposit detected via commitment (not plaintext amount — amounts are private)
+  const hasDeposit = vault.commitment !== "0x0" && vault.commitment !== "0x" && BigInt(vault.commitment || "0") !== 0n;
   const utilizationPct =
     lending.borrowLimit > 0n
       ? Number((lending.debt * 100n) / lending.borrowLimit)
@@ -40,8 +41,8 @@ export default function Dashboard() {
         />
         <StatCard
           title="Your Collateral"
-          value={hasDeposit ? `${satsToBtc(vault.committedAmount)} BTC` : "—"}
-          subtitle={hasDeposit ? "Active commitment" : "No deposit yet"}
+          value={hasDeposit ? "Private" : "—"}
+          subtitle={hasDeposit ? "Commitment active" : "No deposit yet"}
           icon={Lock}
           accent={hasDeposit ? "privacy" : "default"}
         />

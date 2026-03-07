@@ -4,7 +4,6 @@ import { useWallet } from "@/context/WalletContext";
 
 export interface VaultState {
   commitment: string;
-  committedAmount: bigint;
   totalLocked: bigint;
   isPaused: boolean;
   wbtcBalance: bigint;
@@ -21,7 +20,6 @@ export interface TxState {
 
 const INITIAL_STATE: VaultState = {
   commitment: "0x0",
-  committedAmount: 0n,
   totalLocked: 0n,
   isPaused: false,
   wbtcBalance: 0n,
@@ -50,26 +48,23 @@ export function useVault() {
       ]);
 
       let commitment = "0x0";
-      let committedAmount = 0n;
       let wbtcBalance = 0n;
       let wbtcAllowance = 0n;
 
       if (address) {
-        const [c, ca, bal, allow] = await Promise.all([
+        // [H-07 Fix] get_committed_amount removed — amounts are private (commitment-only).
+        const [c, bal, allow] = await Promise.all([
           contracts.vault.get_commitment(address),
-          contracts.vault.get_committed_amount(address),
           contracts.wbtc.balance_of(address),
           contracts.wbtc.allowance(address, contracts.vault.address),
         ]);
         commitment = `0x${BigInt(String(c)).toString(16)}`;
-        committedAmount = extractU256(ca);
         wbtcBalance = extractU256(bal);
         wbtcAllowance = extractU256(allow);
       }
 
       setState({
         commitment,
-        committedAmount,
         totalLocked: extractU256(totalLocked),
         isPaused: Boolean(isPaused),
         wbtcBalance,
@@ -95,7 +90,6 @@ export function useVault() {
       if (!account || !contracts.vault || !contracts.wbtc) return;
       setTx({ status: "pending", hash: null, message: "Approving WBTC..." });
       try {
-        // Contracts are built with the account in providerOrAccount (starknet.js v9)
         const approveTx = await contracts.wbtc.invoke(
           "approve",
           [contracts.vault.address, cairo.uint256(amount)],
@@ -118,14 +112,25 @@ export function useVault() {
     [account, contracts, provider, refresh],
   );
 
+  /**
+   * [H-07 Fix] withdraw now requires the deposit `secret` for on-chain preimage verification.
+   * The contract validates: Poseidon(amount_low, amount_high, secret) == stored_commitment
+   * and Poseidon(commitment, secret) == nullifier.
+   *
+   * The `secret` is the same value used during deposit. It must be kept private by the user.
+   */
   const withdraw = useCallback(
-    async (amount: bigint, nullifier: bigint) => {
+    async (amount: bigint, secret: bigint, nullifier: bigint) => {
       if (!account || !contracts.vault) return;
       setTx({ status: "pending", hash: null, message: "Withdrawing..." });
       try {
         const withdrawTx = await contracts.vault.invoke(
           "withdraw",
-          [cairo.uint256(amount), `0x${nullifier.toString(16)}`],
+          [
+            cairo.uint256(amount),
+            `0x${secret.toString(16)}`,    // deposit secret for preimage check
+            `0x${nullifier.toString(16)}`,
+          ],
         );
         await provider.waitForTransaction(withdrawTx.transaction_hash);
         setTx({ status: "success", hash: withdrawTx.transaction_hash, message: "Withdrawal confirmed!" });

@@ -114,7 +114,9 @@ pub mod Paymaster {
             let vault = ICollateralVaultDispatcher {
                 contract_address: self.vault_address.read(),
             };
-            vault.prove_collateral(user, threshold)
+            // [H-07 Fix] prove_collateral now requires a proof parameter.
+            // Paymaster passes empty span — stub verifier confirms deposit existence.
+            vault.prove_collateral(user, threshold, array![].span())
         }
 
         fn get_remaining_budget(self: @ContractState) -> u256 {

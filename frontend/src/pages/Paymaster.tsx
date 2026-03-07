@@ -21,9 +21,11 @@ export default function Paymaster() {
     setFundAmount("");
   };
 
-  const hasCollateral = vault.committedAmount > 0n;
-  const meetsThreshold =
-    state.threshold > 0n && vault.committedAmount >= state.threshold;
+  // [H-07 Fix] Deposit detected via commitment (amount is private)
+  const hasCollateral = vault.commitment !== "0x0" && vault.commitment !== "0x" && BigInt(vault.commitment || "0") !== 0n;
+  // Threshold check: on-chain, vault.prove_collateral delegates to verifier (stub: commitment != 0)
+  // Frontend: show eligibility based on commitment existence (mirrors stub behavior)
+  const meetsThreshold = hasCollateral && state.threshold > 0n;
 
   return (
     <div className="max-w-2xl space-y-6 animate-fade-in">

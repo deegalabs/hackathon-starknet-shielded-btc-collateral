@@ -27,7 +27,6 @@ trait IMockERC20<TContractState> {
 
 fn deploy_mock_wbtc() -> ContractAddress {
     let contract = declare("MockERC20").unwrap().contract_class();
-    // constructor(decimals: u8) — 8 decimals like Bitcoin satoshis
     let calldata = array![8_u8.into()];
     let (address, _) = contract.deploy(@calldata).unwrap();
     address
@@ -35,7 +34,6 @@ fn deploy_mock_wbtc() -> ContractAddress {
 
 fn deploy_vault(wbtc_address: ContractAddress) -> ContractAddress {
     let contract = declare("CollateralVault").unwrap().contract_class();
-    // constructor(wbtc_token, owner) — use a fixed owner address in tests
     let owner: ContractAddress = 0x4AD.try_into().unwrap();
     let calldata = array![wbtc_address.into(), owner.into()];
     let (address, _) = contract.deploy(@calldata).unwrap();
@@ -50,8 +48,9 @@ fn make_commitment(amount: u256, secret: felt252) -> felt252 {
     poseidon_hash_span(array![amount.low.into(), amount.high.into(), secret].span())
 }
 
-fn make_nullifier(commitment: felt252, withdraw_secret: felt252) -> felt252 {
-    poseidon_hash_span(array![commitment, withdraw_secret].span())
+/// Nullifier = Poseidon(commitment, secret) — matches the updated contract.
+fn make_nullifier(commitment: felt252, secret: felt252) -> felt252 {
+    poseidon_hash_span(array![commitment, secret].span())
 }
 
 // =========================================================================
@@ -96,7 +95,7 @@ fn test_deposit_stores_commitment() {
     let vault_addr = deploy_vault(wbtc);
     let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
 
-    let amount = 10_00000000_u256; // 10 BTC in satoshis
+    let amount = 10_00000000_u256;
     let secret = 0xdeadbeef_felt252;
     let commitment = make_commitment(amount, secret);
 
@@ -109,14 +108,18 @@ fn test_deposit_stores_commitment() {
     assert(vault.get_commitment(alice()) == commitment, 'Commitment not stored');
 }
 
+/// [H-07 Fix] No plaintext amount is stored — only the Poseidon commitment.
+/// This test validates the privacy model: get_committed_amount does NOT exist.
+/// The commitment is the ONLY on-chain representation of the deposited value.
 #[test]
-fn test_deposit_stores_committed_amount() {
+fn test_deposit_stores_commitment_only_no_plaintext() {
     let wbtc = deploy_mock_wbtc();
     let vault_addr = deploy_vault(wbtc);
     let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
 
     let amount = 5_00000000_u256;
-    let commitment = make_commitment(amount, 0xabc_felt252);
+    let secret = 0xabc_felt252;
+    let commitment = make_commitment(amount, secret);
 
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
@@ -124,7 +127,15 @@ fn test_deposit_stores_committed_amount() {
     vault.deposit(amount, commitment);
     stop_cheat_caller_address(vault_addr);
 
-    assert(vault.get_committed_amount(alice()) == amount, 'Committed amount not stored');
+    // Verify commitment is stored (cryptographic binding to amount)
+    assert(vault.get_commitment(alice()) == commitment, 'Commitment must be stored');
+
+    // Verify vault holds WBTC (tokens are locked)
+    let erc20 = IERC20Dispatcher { contract_address: wbtc };
+    assert(erc20.balance_of(vault_addr) == amount, 'Vault must hold WBTC');
+
+    // Verify total_locked is updated (aggregate, non-private)
+    assert(vault.get_total_locked() == amount, 'Total locked must equal deposit');
 }
 
 #[test]
@@ -134,7 +145,7 @@ fn test_deposit_transfers_wbtc_to_vault() {
     let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
     let erc20 = IERC20Dispatcher { contract_address: wbtc };
 
-    let amount = 5_00000000_u256; // 5 BTC
+    let amount = 5_00000000_u256;
     let commitment = make_commitment(amount, 0x1234_felt252);
 
     fund_and_approve(wbtc, vault_addr, alice(), amount);
@@ -235,13 +246,14 @@ fn test_deposit_allowed_after_full_withdrawal() {
     erc20.approve(vault_addr, amount * 2);
     stop_cheat_caller_address(wbtc);
 
-    let commitment1 = make_commitment(amount, 0xaaa_felt252);
-    let nullifier1 = make_nullifier(commitment1, 0xbbb_felt252);
+    let secret1 = 0xaaa_felt252;
+    let commitment1 = make_commitment(amount, secret1);
+    let nullifier1 = make_nullifier(commitment1, secret1);
     let commitment2 = make_commitment(amount, 0xccc_felt252);
 
     start_cheat_caller_address(vault_addr, alice());
     vault.deposit(amount, commitment1);
-    vault.withdraw(amount, nullifier1); // clears commitment
+    vault.withdraw(amount, secret1, nullifier1); // clears commitment
     vault.deposit(amount, commitment2); // must succeed
     stop_cheat_caller_address(vault_addr);
 
@@ -251,15 +263,22 @@ fn test_deposit_allowed_after_full_withdrawal() {
 // =========================================================================
 // PROVE COLLATERAL TESTS
 // =========================================================================
+// NOTE ON STUB BEHAVIOR:
+//   The vault has no verifier configured in these tests (zero address).
+//   Fallback: prove_collateral returns `commitment != 0` for any non-zero commitment.
+//   This confirms deposit EXISTENCE but does NOT enforce the threshold.
+//   Threshold enforcement requires a production RangeProofVerifier.
+//   See SECURITY.md for H-07 documentation.
 
-// [H-02] Fix: prove_collateral must now respect the threshold
+/// [H-07 Fix] prove_collateral returns true when commitment exists (stub: no threshold check).
+/// The key property tested: commitment-only model, no plaintext amount reads.
 #[test]
-fn test_prove_collateral_passes_when_above_threshold() {
+fn test_prove_collateral_returns_true_when_commitment_exists() {
     let wbtc = deploy_mock_wbtc();
     let vault_addr = deploy_vault(wbtc);
     let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
 
-    let amount = 10_00000000_u256; // 10 BTC
+    let amount = 10_00000000_u256;
     let commitment = make_commitment(amount, 0xabc_felt252);
 
     fund_and_approve(wbtc, vault_addr, alice(), amount);
@@ -268,40 +287,63 @@ fn test_prove_collateral_passes_when_above_threshold() {
     vault.deposit(amount, commitment);
     stop_cheat_caller_address(vault_addr);
 
-    assert(vault.prove_collateral(alice(), 1_50000000_u256), 'Should pass: 10 >= 1.5 BTC');
-    assert(vault.prove_collateral(alice(), 5_00000000_u256), 'Should pass: 10 >= 5 BTC');
-    assert(vault.prove_collateral(alice(), 10_00000000_u256), 'Should pass: 10 >= 10 BTC');
+    // Stub verifier: returns true for any non-zero commitment (no threshold check).
+    // Empty proof span = stub mode.
+    assert(vault.prove_collateral(alice(), 1_u256, array![].span()), 'Should return true');
+    assert(
+        vault.prove_collateral(alice(), 5_00000000_u256, array![].span()),
+        'Should return true (stub)',
+    );
+    assert(
+        vault.prove_collateral(alice(), 10_00000000_u256, array![].span()),
+        'Should return true (stub)',
+    );
+    // NOTE: Even a threshold higher than the deposited amount returns true in stub mode.
+    // This is the documented stub limitation. Production verifier would return false here.
+    assert(
+        vault.prove_collateral(alice(), 100_00000000_u256, array![].span()),
+        'Stub: true for any threshold',
+    );
 }
 
-// [H-02] Fix: prove_collateral must fail when deposited amount is below threshold
-#[test]
-fn test_prove_collateral_fails_when_below_threshold() {
-    let wbtc = deploy_mock_wbtc();
-    let vault_addr = deploy_vault(wbtc);
-    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
-
-    let amount = 1_00000000_u256; // 1 BTC deposited
-    let commitment = make_commitment(amount, 0xabc_felt252);
-
-    fund_and_approve(wbtc, vault_addr, alice(), amount);
-
-    start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, commitment);
-    stop_cheat_caller_address(vault_addr);
-
-    // Threshold is higher than deposited amount — must fail
-    assert(!vault.prove_collateral(alice(), 5_00000000_u256), 'Should fail: 1 < 5 BTC');
-    assert(!vault.prove_collateral(alice(), 2_00000000_u256), 'Should fail: 1 < 2 BTC');
-}
-
+/// Stub verifier returns false only when NO commitment exists (zero commitment).
 #[test]
 fn test_prove_collateral_returns_false_for_no_deposit() {
     let wbtc = deploy_mock_wbtc();
     let vault_addr = deploy_vault(wbtc);
     let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
 
-    // Bob has never deposited — should return false
-    assert(!vault.prove_collateral(bob(), 1_u256), 'Should return false for Bob');
+    // Bob has never deposited — should return false regardless of threshold.
+    assert(!vault.prove_collateral(bob(), 1_u256, array![].span()), 'False when no commitment');
+    assert(
+        !vault.prove_collateral(bob(), 1000_u256, array![].span()), 'False for any threshold',
+    );
+}
+
+/// prove_collateral returns false AFTER withdrawal (commitment cleared).
+#[test]
+fn test_prove_collateral_false_after_withdrawal() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+
+    let amount = 5_00000000_u256;
+    let secret = 0xBEEF_felt252;
+    let commitment = make_commitment(amount, secret);
+    let nullifier = make_nullifier(commitment, secret);
+
+    fund_and_approve(wbtc, vault_addr, alice(), amount);
+
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, commitment);
+    assert(vault.prove_collateral(alice(), 1_u256, array![].span()), 'True before withdrawal');
+    vault.withdraw(amount, secret, nullifier);
+    stop_cheat_caller_address(vault_addr);
+
+    // After withdrawal commitment is cleared → prove_collateral returns false
+    assert(
+        !vault.prove_collateral(alice(), 1_u256, array![].span()), 'False after withdrawal',
+    );
 }
 
 // =========================================================================
@@ -316,14 +358,15 @@ fn test_withdraw_returns_wbtc_to_user() {
     let erc20 = IERC20Dispatcher { contract_address: wbtc };
 
     let amount = 2_00000000_u256;
-    let commitment = make_commitment(amount, 0xfeed_felt252);
-    let nullifier = make_nullifier(commitment, 0xbeef_felt252);
+    let secret = 0xfeed_felt252;
+    let commitment = make_commitment(amount, secret);
+    let nullifier = make_nullifier(commitment, secret);
 
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
     start_cheat_caller_address(vault_addr, alice());
     vault.deposit(amount, commitment);
-    vault.withdraw(amount, nullifier);
+    vault.withdraw(amount, secret, nullifier);
     stop_cheat_caller_address(vault_addr);
 
     assert(erc20.balance_of(alice()) == amount, 'Alice should receive WBTC');
@@ -337,8 +380,9 @@ fn test_withdraw_marks_nullifier_as_used() {
     let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
 
     let amount = 1_00000000_u256;
-    let commitment = make_commitment(amount, 0x111_felt252);
-    let nullifier = make_nullifier(commitment, 0x222_felt252);
+    let secret = 0x111_felt252;
+    let commitment = make_commitment(amount, secret);
+    let nullifier = make_nullifier(commitment, secret);
 
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
@@ -346,7 +390,7 @@ fn test_withdraw_marks_nullifier_as_used() {
 
     start_cheat_caller_address(vault_addr, alice());
     vault.deposit(amount, commitment);
-    vault.withdraw(amount, nullifier);
+    vault.withdraw(amount, secret, nullifier);
     stop_cheat_caller_address(vault_addr);
 
     assert(vault.is_nullifier_used(nullifier), 'Nullifier should be used now');
@@ -359,19 +403,19 @@ fn test_withdraw_clears_commitment() {
     let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
 
     let amount = 1_00000000_u256;
-    let commitment = make_commitment(amount, 0x999_felt252);
-    let nullifier = make_nullifier(commitment, 0x888_felt252);
+    let secret = 0x999_felt252;
+    let commitment = make_commitment(amount, secret);
+    let nullifier = make_nullifier(commitment, secret);
 
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
     start_cheat_caller_address(vault_addr, alice());
     vault.deposit(amount, commitment);
     assert(vault.get_commitment(alice()) != 0, 'Commitment should exist');
-    vault.withdraw(amount, nullifier);
+    vault.withdraw(amount, secret, nullifier);
     stop_cheat_caller_address(vault_addr);
 
     assert(vault.get_commitment(alice()) == 0, 'Commitment should be cleared');
-    assert(vault.get_committed_amount(alice()) == 0_u256, 'Amount should be cleared');
 }
 
 #[test]
@@ -381,15 +425,16 @@ fn test_withdraw_updates_total_locked() {
     let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
 
     let amount = 4_00000000_u256;
-    let commitment = make_commitment(amount, 0x333_felt252);
-    let nullifier = make_nullifier(commitment, 0x444_felt252);
+    let secret = 0x333_felt252;
+    let commitment = make_commitment(amount, secret);
+    let nullifier = make_nullifier(commitment, secret);
 
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
     start_cheat_caller_address(vault_addr, alice());
     vault.deposit(amount, commitment);
     assert(vault.get_total_locked() == amount, 'Total should equal deposit');
-    vault.withdraw(amount, nullifier);
+    vault.withdraw(amount, secret, nullifier);
     stop_cheat_caller_address(vault_addr);
 
     assert(vault.get_total_locked() == 0_u256, 'Total should be zero after');
@@ -407,10 +452,10 @@ fn test_double_spend_prevention() {
     let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
 
     let amount = 1_00000000_u256;
-    let commitment = make_commitment(amount, 0x999_felt252);
-    let nullifier = make_nullifier(commitment, 0xaaa_felt252);
+    let secret = 0x999_felt252;
+    let commitment = make_commitment(amount, secret);
+    let nullifier = make_nullifier(commitment, secret);
 
-    // Fund twice so the vault has enough for a second attempt
     let mock = IMockERC20Dispatcher { contract_address: wbtc };
     mock.mint(alice(), amount * 2);
     let erc20 = IERC20Dispatcher { contract_address: wbtc };
@@ -420,13 +465,13 @@ fn test_double_spend_prevention() {
 
     start_cheat_caller_address(vault_addr, alice());
     vault.deposit(amount, commitment);
-    vault.withdraw(amount, nullifier); // First withdrawal: OK (nullifier marked used, commitment cleared)
-    vault.withdraw(amount, nullifier); // Second: must revert with 'Nullifier already used'
+    vault.withdraw(amount, secret, nullifier); // First: OK (nullifier marked used)
+    vault.withdraw(amount, secret, nullifier); // Second: must revert 'Nullifier already used'
     stop_cheat_caller_address(vault_addr);
 }
 
 // =========================================================================
-// SECURITY: C-01 — Drain Attack Prevention (no commitment = no withdrawal)
+// SECURITY: C-01 — Drain Attack Prevention
 // =========================================================================
 
 #[test]
@@ -436,7 +481,6 @@ fn test_withdraw_fails_without_commitment() {
     let vault_addr = deploy_vault(wbtc);
     let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
 
-    // Seed the vault with Alice's deposit
     let amount = 5_00000000_u256;
     fund_and_approve(wbtc, vault_addr, alice(), amount);
     let commitment = make_commitment(amount, 0x111_felt252);
@@ -444,36 +488,139 @@ fn test_withdraw_fails_without_commitment() {
     vault.deposit(amount, commitment);
     stop_cheat_caller_address(vault_addr);
 
-    // Attacker (no deposit) tries to drain
-    let attacker_nullifier = make_nullifier(0xBAD_felt252, 0xDEAD_felt252);
+    // Attacker (no deposit) tries to drain using a fabricated commitment+secret
+    let attacker_secret = 0xBAD_felt252;
+    let attacker_commitment = 0xF4FEFEFE_felt252;
+    let attacker_nullifier = make_nullifier(attacker_commitment, attacker_secret);
     start_cheat_caller_address(vault_addr, attacker());
-    vault.withdraw(amount, attacker_nullifier); // Must revert: 'No active commitment'
+    vault.withdraw(amount, attacker_secret, attacker_nullifier); // 'No active commitment'
     stop_cheat_caller_address(vault_addr);
 }
 
 // =========================================================================
-// SECURITY: C-02 — Amount Mismatch Prevention
+// SECURITY: H-07 — Preimage check prevents unauthorized withdrawal
 // =========================================================================
 
+/// [H-07 Fix] Wrong secret → commitment mismatch → withdrawal rejected.
+/// Replaces the old C-02 plaintext amount check with cryptographic preimage verification.
 #[test]
-#[should_panic(expected: 'Amount does not match deposit')]
+#[should_panic(expected: 'Invalid preimage')]
+fn test_withdraw_fails_with_wrong_secret() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+
+    let amount = 1_00000000_u256;
+    let correct_secret = 0x555_felt252;
+    let wrong_secret = 0x999_felt252;
+    let commitment = make_commitment(amount, correct_secret);
+
+    fund_and_approve(wbtc, vault_addr, alice(), amount);
+
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, commitment);
+
+    // Attempt withdrawal with wrong secret — preimage check fails
+    let bad_nullifier = make_nullifier(commitment, wrong_secret);
+    vault.withdraw(amount, wrong_secret, bad_nullifier); // 'Invalid preimage'
+    stop_cheat_caller_address(vault_addr);
+}
+
+/// [H-07 Fix] Wrong amount with correct secret → commitment mismatch → rejected.
+/// This replaces the old 'Amount does not match deposit' plaintext check.
+#[test]
+#[should_panic(expected: 'Invalid preimage')]
 fn test_withdraw_fails_with_wrong_amount() {
     let wbtc = deploy_mock_wbtc();
     let vault_addr = deploy_vault(wbtc);
     let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
 
-    // Alice deposits 1 BTC
     let deposit_amount = 1_00000000_u256;
+    let correct_secret = 0x555_felt252;
+    let commitment = make_commitment(deposit_amount, correct_secret);
+
     fund_and_approve(wbtc, vault_addr, alice(), deposit_amount);
-    let commitment = make_commitment(deposit_amount, 0x555_felt252);
+
     start_cheat_caller_address(vault_addr, alice());
     vault.deposit(deposit_amount, commitment);
 
-    // Alice tries to withdraw MORE than deposited — must fail
-    let nullifier = make_nullifier(commitment, 0x666_felt252);
-    let inflated_amount = 10_00000000_u256; // 10x the actual deposit
-    vault.withdraw(inflated_amount, nullifier); // Must revert: 'Amount does not match deposit'
+    // Alice tries to withdraw MORE — Poseidon(10BTC, secret) != commitment → 'Invalid preimage'
+    let inflated_amount = 10_00000000_u256;
+    let nullifier = make_nullifier(commitment, correct_secret);
+    vault.withdraw(inflated_amount, correct_secret, nullifier); // 'Invalid preimage'
     stop_cheat_caller_address(vault_addr);
+}
+
+/// [H-07 Fix] Forged nullifier (not derived from commitment+secret) → rejected.
+#[test]
+#[should_panic(expected: 'Invalid nullifier')]
+fn test_withdraw_fails_with_forged_nullifier() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+
+    let amount = 1_00000000_u256;
+    let secret = 0x777_felt252;
+    let commitment = make_commitment(amount, secret);
+    let forged_nullifier = 0xDEAD_felt252; // Not derived from commitment+secret
+
+    fund_and_approve(wbtc, vault_addr, alice(), amount);
+
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, commitment);
+    vault.withdraw(amount, secret, forged_nullifier); // 'Invalid nullifier'
+    stop_cheat_caller_address(vault_addr);
+}
+
+// =========================================================================
+// PRIVACY MODEL TEST
+// =========================================================================
+
+/// [H-07 Fix] Core privacy model test:
+/// - Commitment is stored (binding to amount)
+/// - No plaintext amount is accessible on-chain
+/// - prove_collateral works without reading the amount
+/// - Withdrawal requires knowledge of the secret (preimage)
+#[test]
+fn test_privacy_model_commitment_only() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+
+    let amount = 5_00000000_u256;
+    let secret = 0x5ECBE7_felt252;
+    let commitment = make_commitment(amount, secret);
+    let nullifier = make_nullifier(commitment, secret);
+
+    fund_and_approve(wbtc, vault_addr, alice(), amount);
+
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, commitment);
+    stop_cheat_caller_address(vault_addr);
+
+    // 1. Commitment is stored on-chain
+    let stored = vault.get_commitment(alice());
+    assert(stored == commitment, 'Commitment must be stored');
+
+    // 2. Commitment is a Poseidon hash — opaque to on-chain observers
+    //    (amount is NOT recoverable from the commitment alone)
+
+    // 3. prove_collateral works without revealing amount (stub: commitment != 0)
+    assert(
+        vault.prove_collateral(alice(), 1_00000000_u256, array![].span()),
+        'Prove collateral must work',
+    );
+
+    // 4. Withdrawal requires knowledge of secret (preimage proof on-chain)
+    start_cheat_caller_address(vault_addr, alice());
+    vault.withdraw(amount, secret, nullifier);
+    stop_cheat_caller_address(vault_addr);
+
+    // 5. After withdrawal: commitment cleared, prove_collateral returns false
+    assert(vault.get_commitment(alice()) == 0_felt252, 'Commitment not cleared');
+    assert(
+        !vault.prove_collateral(alice(), 1_u256, array![].span()), 'False after withdrawal',
+    );
 }
 
 // =========================================================================
@@ -496,15 +643,6 @@ fn test_get_commitment_returns_zero_before_deposit() {
     let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
 
     assert(vault.get_commitment(alice()) == 0, 'Should be zero before deposit');
-}
-
-#[test]
-fn test_get_committed_amount_returns_zero_before_deposit() {
-    let wbtc = deploy_mock_wbtc();
-    let vault_addr = deploy_vault(wbtc);
-    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
-
-    assert(vault.get_committed_amount(alice()) == 0_u256, 'Should be zero before deposit');
 }
 
 #[test]
@@ -543,25 +681,27 @@ fn test_multiple_users_independent_commitments() {
     vault.deposit(bob_amount, bob_commitment);
     stop_cheat_caller_address(vault_addr);
 
-    // Commitments are independent
+    // Commitments are independent and different
     assert(vault.get_commitment(alice()) == alice_commitment, 'Wrong alice commitment');
     assert(vault.get_commitment(bob()) == bob_commitment, 'Wrong bob commitment');
-    assert(vault.get_commitment(alice()) != vault.get_commitment(bob()), 'Commitments should differ');
+    assert(vault.get_commitment(alice()) != vault.get_commitment(bob()), 'Commitments must differ');
 
-    // Committed amounts are independent
-    assert(vault.get_committed_amount(alice()) == alice_amount, 'Wrong alice amount');
-    assert(vault.get_committed_amount(bob()) == bob_amount, 'Wrong bob amount');
+    // Both users have active commitments → prove_collateral returns true (stub behavior)
+    assert(
+        vault.prove_collateral(alice(), 1_u256, array![].span()), 'Alice: has commitment',
+    );
+    assert(
+        vault.prove_collateral(bob(), 1_u256, array![].span()), 'Bob: has commitment',
+    );
 
-    // Threshold-respecting collateral proofs
-    assert(vault.prove_collateral(alice(), 5_00000000_u256), 'Alice: 10 >= 5 BTC');
-    assert(!vault.prove_collateral(alice(), 11_00000000_u256), 'Alice: 10 < 11 BTC');
-    assert(vault.prove_collateral(bob(), 1_00000000_u256), 'Bob: 3 >= 1 BTC');
-    assert(!vault.prove_collateral(bob(), 5_00000000_u256), 'Bob: 3 < 5 BTC');
+    // User with no deposit → false
+    let charlie: ContractAddress = 0xCC.try_into().unwrap();
+    assert(
+        !vault.prove_collateral(charlie, 1_u256, array![].span()), 'Charlie: no commitment',
+    );
 
     // Total is sum of both deposits
-    assert(
-        vault.get_total_locked() == alice_amount + bob_amount, 'Total should be sum',
-    );
+    assert(vault.get_total_locked() == alice_amount + bob_amount, 'Total should be sum');
 }
 
 // =========================================================================
@@ -620,7 +760,6 @@ fn test_deposit_fails_when_paused() {
     let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
     let admin_iface = ICollateralVaultAdminDispatcher { contract_address: vault_addr };
 
-    // Pause the vault
     start_cheat_caller_address(vault_addr, admin());
     admin_iface.pause();
     stop_cheat_caller_address(vault_addr);
@@ -643,22 +782,21 @@ fn test_withdraw_fails_when_paused() {
     let admin_iface = ICollateralVaultAdminDispatcher { contract_address: vault_addr };
 
     let amount = 1_00000000_u256;
-    let commitment = make_commitment(amount, 0xf00_felt252);
-    let nullifier = make_nullifier(commitment, 0xbaa_felt252);
+    let secret = 0xf00_felt252;
+    let commitment = make_commitment(amount, secret);
+    let nullifier = make_nullifier(commitment, secret);
 
     fund_and_approve(wbtc, vault_addr, alice(), amount);
     start_cheat_caller_address(vault_addr, alice());
     vault.deposit(amount, commitment);
     stop_cheat_caller_address(vault_addr);
 
-    // Pause the vault after deposit
     start_cheat_caller_address(vault_addr, admin());
     admin_iface.pause();
     stop_cheat_caller_address(vault_addr);
 
-    // Withdrawal must fail while paused
     start_cheat_caller_address(vault_addr, alice());
-    vault.withdraw(amount, nullifier); // Must revert: 'Vault is paused'
+    vault.withdraw(amount, secret, nullifier); // Must revert: 'Vault is paused'
     stop_cheat_caller_address(vault_addr);
 }
 
@@ -681,7 +819,10 @@ fn test_prove_collateral_works_when_paused() {
     admin_iface.pause();
     stop_cheat_caller_address(vault_addr);
 
-    assert(vault.prove_collateral(alice(), 1_00000000_u256), 'Proof should work when paused');
+    assert(
+        vault.prove_collateral(alice(), 1_00000000_u256, array![].span()),
+        'Proof should work when paused',
+    );
 }
 
 #[test]

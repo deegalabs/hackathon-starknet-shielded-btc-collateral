@@ -116,11 +116,14 @@ pub mod MockLendingProtocol {
                 + (LTV_RATIO - 1).into())
                 / LTV_RATIO.into();
 
-            // Privacy-preserving collateral check — vault does NOT reveal exact amount
+            // Privacy-preserving collateral check — vault does NOT reveal exact amount.
+            // [H-07 Fix] prove_collateral now accepts a proof parameter.
+            // MVP: empty span → stub verifier returns commitment != 0 (deposit existence).
+            // Production: user-supplied STARK range proof for threshold enforcement.
             let vault = ICollateralVaultDispatcher {
                 contract_address: self.vault_address.read(),
             };
-            let has_collateral = vault.prove_collateral(borrower, required_collateral);
+            let has_collateral = vault.prove_collateral(borrower, required_collateral, array![].span());
             assert(has_collateral, 'Insufficient BTC collateral');
 
             // Record the debt
@@ -161,24 +164,28 @@ pub mod MockLendingProtocol {
 
         /// Calculate maximum borrowable amount.
         ///
-        /// Checks collateral in satoshi increments using the LTV ratio.
-        /// Uses a binary-search-like approach: checks if collateral >= threshold.
+        /// [H-07 Fix] Cannot determine exact borrow limit without knowing the deposited amount.
+        /// In the commitment-only privacy model, the exact amount is hidden.
         ///
-        /// MVP simplification: returns borrow_limit = committed_amount * LTV / 100
-        /// by checking the vault's committed amount directly.
-        /// Production: this would derive from the ZK proof without revealing the amount.
+        /// Returns 0 — privacy-preserving and honest about the stub limitation.
+        ///
+        /// Production path: The user's ZK range proof would encode the borrow limit
+        /// directly (e.g., prove amount is in range [min, max] to bound the limit).
+        /// This would require a specialized circuit beyond the MVP scope.
+        ///
+        /// For UX purposes, the frontend can prompt the user to input their amount
+        /// off-chain (client-side only, never sent to the contract).
         fn get_borrow_limit(self: @ContractState, borrower: ContractAddress) -> u256 {
             let vault = ICollateralVaultDispatcher {
                 contract_address: self.vault_address.read(),
             };
-            // Check if user has any collateral at all (1 satoshi threshold)
-            if !vault.prove_collateral(borrower, 1_u256) {
+            // Check if user has any active deposit at all
+            if !vault.prove_collateral(borrower, 1_u256, array![].span()) {
                 return 0_u256;
             }
-            // Return collateral * LTV_RATIO / LTV_DENOMINATOR
-            // MVP: vault exposes committed_amount for this calculation
-            let committed = vault.get_committed_amount(borrower);
-            (committed * LTV_RATIO.into()) / LTV_DENOMINATOR.into()
+            // Privacy-preserving: return 0 to avoid exposing the amount.
+            // Production: derive from ZK range proof circuit output.
+            0_u256
         }
 
         fn get_ltv_ratio(self: @ContractState) -> u64 {

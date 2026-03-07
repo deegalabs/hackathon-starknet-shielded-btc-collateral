@@ -16,15 +16,18 @@ export default function Lending() {
   const [borrowAmount, setBorrowAmount] = useState("");
   const [repayAmount, setRepayAmount] = useState("");
 
-  const hasCollateral = vault.committedAmount > 0n;
+  // [H-07 Fix] Deposit detected via commitment (amount is private — not stored on-chain)
+  const hasCollateral = vault.commitment !== "0x0" && vault.commitment !== "0x" && BigInt(vault.commitment || "0") !== 0n;
   const hasDebt = state.debt > 0n;
 
   // Required collateral (ceiling division at 70% LTV)
+  // [H-07 Fix] We can't compare to committedAmount (private) — the vault contract
+  // uses prove_collateral to verify on-chain. The UI shows required threshold only.
   const borrowSats = btcToSats(borrowAmount);
   const requiredCollateral =
     borrowSats > 0n ? (borrowSats * 100n + 69n) / 70n : 0n;
-  const collateralCoversLoan =
-    borrowSats > 0n && vault.committedAmount >= requiredCollateral;
+  // With stub verifier: any depositor passes. Frontend shows threshold for informational purposes.
+  const collateralCoversLoan = borrowSats > 0n && hasCollateral;
 
   const utilizationPct =
     state.borrowLimit > 0n
@@ -163,10 +166,9 @@ export default function Lending() {
                   </span>
                 </div>
                 <div className="flex justify-between border-t border-border pt-2">
-                  <span className="text-muted">Your collateral</span>
-                  <span className={collateralCoversLoan ? "text-privacy" : "text-red-400"}>
-                    {vault.committedAmount.toLocaleString()} sats{" "}
-                    {collateralCoversLoan ? "✓" : "✗"}
+                  <span className="text-muted">Your commitment</span>
+                  <span className={hasCollateral ? "text-privacy" : "text-red-400"}>
+                    {hasCollateral ? "Active ✓" : "None ✗"}
                   </span>
                 </div>
               </div>

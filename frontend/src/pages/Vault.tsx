@@ -39,12 +39,16 @@ export default function Vault() {
   const [showSecret, setShowSecret] = useState(false);
   const [commitment, setCommitment] = useState<bigint | null>(null);
 
-  // Withdraw form
+  // Withdraw form — user must provide their original deposit amount + secret
+  const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawSecret, setWithdrawSecret] = useState("");
   const [showWithdrawSecret, setShowWithdrawSecret] = useState(false);
   const [nullifier, setNullifier] = useState<bigint | null>(null);
 
   const [showProofDetails, setShowProofDetails] = useState(false);
+
+  // Has active commitment on-chain (privacy model: amount is unknown from state)
+  const hasDeposit = state.commitment !== "0x0" && state.commitment !== "0x" && BigInt(state.commitment) !== 0n;
 
   // Live commitment preview
   useEffect(() => {
@@ -61,10 +65,11 @@ export default function Vault() {
     }
   }, [depositAmount, secret]);
 
-  // Live nullifier preview
+  // Live nullifier preview — uses commitment from chain + withdraw secret
+  // [H-07 Fix] nullifier = Poseidon(commitment, secret) where secret = deposit secret
   useEffect(() => {
     const storedCommitment =
-      state.commitment !== "0x0" ? BigInt(state.commitment) : null;
+      hasDeposit ? BigInt(state.commitment) : null;
     const sec = withdrawSecret ? BigInt(withdrawSecret) : null;
     if (storedCommitment && sec !== null) {
       try {
@@ -75,7 +80,7 @@ export default function Vault() {
     } else {
       setNullifier(null);
     }
-  }, [withdrawSecret, state.commitment]);
+  }, [withdrawSecret, state.commitment, hasDeposit]);
 
   const handleGenerateSecret = () => {
     setSecret(toHex(generateSecret()));
@@ -87,12 +92,21 @@ export default function Vault() {
     await deposit(sats, commitment);
   };
 
+  /**
+   * [H-07 Fix] Withdrawal now requires:
+   * 1. The original deposit amount (user must remember/input it)
+   * 2. The deposit secret (for on-chain preimage verification)
+   * 3. The nullifier (derived client-side from commitment + secret)
+   *
+   * On-chain: Poseidon(amount, secret) == stored_commitment
+   *           Poseidon(commitment, secret) == nullifier
+   */
   const handleWithdraw = async () => {
-    if (!nullifier || state.committedAmount === 0n) return;
-    await withdraw(state.committedAmount, nullifier);
+    const sats = btcToSats(withdrawAmount);
+    if (!nullifier || sats <= 0n || !withdrawSecret) return;
+    const secretBig = BigInt(withdrawSecret);
+    await withdraw(sats, secretBig, nullifier);
   };
-
-  const hasDeposit = state.committedAmount > 0n;
 
   return (
     <div className="max-w-2xl space-y-6 animate-fade-in">
@@ -114,11 +128,11 @@ export default function Vault() {
       {/* Stats row */}
       <div className="grid grid-cols-2 gap-4">
         <StatCard
-          title="Your Collateral"
-          value={hasDeposit ? `${satsToBtc(state.committedAmount)} BTC` : "—"}
-          subtitle={hasDeposit ? "Active commitment" : "No deposit"}
-          icon={Bitcoin}
-          accent={hasDeposit ? "btc" : "default"}
+          title="Your Commitment"
+          value={hasDeposit ? "Active" : "—"}
+          subtitle={hasDeposit ? "Private deposit exists" : "No deposit"}
+          icon={ShieldCheck}
+          accent={hasDeposit ? "privacy" : "default"}
         />
         <StatCard
           title="Total Locked"
@@ -127,6 +141,16 @@ export default function Vault() {
           icon={Lock}
           accent="privacy"
         />
+      </div>
+
+      {/* H-07 privacy note */}
+      <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-privacy/5 border border-privacy/20 text-xs text-muted">
+        <ShieldCheck size={14} className="text-privacy mt-0.5 shrink-0" />
+        <span>
+          <span className="text-privacy font-medium">Privacy model active: </span>
+          Your deposit amount is hidden behind a Poseidon commitment. Only you know the amount.
+          No plaintext is stored on-chain.
+        </span>
       </div>
 
       {/* Paused warning */}
@@ -215,11 +239,11 @@ export default function Vault() {
                   </button>
                 </div>
                 <p className="text-xs text-amber-400/80 mt-1">
-                  ⚠ Store your secret safely — you need it to withdraw
+                  ⚠ Store your secret safely — you need it AND your amount to withdraw
                 </p>
               </div>
 
-              {/* Live commitment preview — the KEY privacy UX moment */}
+              {/* Live commitment preview */}
               <div
                 className={clsx(
                   "rounded-xl border p-4 transition-all",
@@ -285,13 +309,13 @@ export default function Vault() {
                   !isConnected ||
                   !commitment ||
                   state.isPaused ||
-                  state.committedAmount > 0n ||
+                  hasDeposit ||
                   tx.status === "pending"
                 }
                 onClick={handleDeposit}
                 className="w-full py-3 rounded-lg font-medium text-sm transition-all bg-btc text-white hover:bg-btc-dim disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {state.committedAmount > 0n
+                {hasDeposit
                   ? "Active commitment exists — withdraw first"
                   : !isConnected
                     ? "Connect wallet to deposit"
@@ -313,12 +337,6 @@ export default function Vault() {
               ) : (
                 <>
                   <div className="rounded-lg border border-border bg-surface-2 p-3 space-y-2 font-mono text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-muted">Committed amount</span>
-                      <span className="text-btc">
-                        {satsToBtc(state.committedAmount)} BTC
-                      </span>
-                    </div>
                     <div className="flex justify-between items-center">
                       <span className="text-muted">Your commitment</span>
                       <button
@@ -340,15 +358,32 @@ export default function Vault() {
                     )}
                   </div>
 
-                  {/* Withdraw secret */}
+                  {/* [H-07 Fix] Withdraw requires amount input — no longer stored on-chain */}
                   <div>
                     <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-2">
-                      Withdraw Secret
+                      Deposit Amount (BTC)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="0.00000000 — the amount you deposited"
+                      value={withdrawAmount}
+                      onChange={(e) => setWithdrawAmount(e.target.value)}
+                      className="w-full bg-surface-2 border border-border rounded-lg px-4 py-3 text-white placeholder-muted font-mono text-sm focus:outline-none focus:border-btc transition-colors"
+                    />
+                    <p className="text-xs text-muted mt-1">
+                      Must match your original deposit exactly — verified on-chain via Poseidon preimage.
+                    </p>
+                  </div>
+
+                  {/* Withdraw secret = original deposit secret */}
+                  <div>
+                    <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-2">
+                      Deposit Secret
                     </label>
                     <div className="relative">
                       <input
                         type={showWithdrawSecret ? "text" : "password"}
-                        placeholder="0x... (the secret you used when depositing, or a new withdraw secret)"
+                        placeholder="0x... (the secret you used when depositing)"
                         value={withdrawSecret}
                         onChange={(e) => setWithdrawSecret(e.target.value)}
                         className="w-full bg-surface-2 border border-border rounded-lg px-4 py-3 text-white placeholder-muted font-mono text-xs focus:outline-none focus:border-stark transition-colors pr-10"
@@ -366,6 +401,9 @@ export default function Vault() {
                         )}
                       </button>
                     </div>
+                    <p className="text-xs text-muted mt-1">
+                      On-chain: Poseidon(amount, secret) == commitment. Proves you know both.
+                    </p>
                   </div>
 
                   {/* Nullifier preview */}
@@ -394,7 +432,7 @@ export default function Vault() {
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted">withdraw_secret</span>
+                        <span className="text-muted">secret</span>
                         <span className="text-amber-400">
                           {withdrawSecret ? "•••••••••" : "—"}
                         </span>
@@ -422,6 +460,8 @@ export default function Vault() {
                     disabled={
                       !isConnected ||
                       !nullifier ||
+                      !withdrawAmount ||
+                      btcToSats(withdrawAmount) <= 0n ||
                       state.isPaused ||
                       tx.status === "pending"
                     }

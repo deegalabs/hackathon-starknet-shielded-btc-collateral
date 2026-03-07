@@ -1,11 +1,30 @@
 /** Minimal ABIs for each protocol contract — Starknet Cairo 2 ABI format */
 
+// [H-07 Fix — March 7, 2026]
+// - withdraw: added `secret` parameter (preimage proof, replaces plaintext amount check)
+// - prove_collateral: added `proof` parameter (ZK proof span, empty for stub verifier)
+// - get_committed_amount: REMOVED (privacy-preserving, amounts no longer stored on-chain)
 export const VAULT_ABI = [
   { type: "function", name: "deposit", inputs: [{ name: "amount", type: "core::integer::u256" }, { name: "commitment", type: "core::felt252" }], outputs: [], state_mutability: "external" },
-  { type: "function", name: "withdraw", inputs: [{ name: "amount", type: "core::integer::u256" }, { name: "nullifier", type: "core::felt252" }], outputs: [], state_mutability: "external" },
-  { type: "function", name: "prove_collateral", inputs: [{ name: "user", type: "core::starknet::contract_address::ContractAddress" }, { name: "threshold", type: "core::integer::u256" }], outputs: [{ type: "core::bool" }], state_mutability: "view" },
+  {
+    type: "function", name: "withdraw",
+    inputs: [
+      { name: "amount", type: "core::integer::u256" },
+      { name: "secret", type: "core::felt252" },     // deposit secret for preimage check
+      { name: "nullifier", type: "core::felt252" },
+    ],
+    outputs: [], state_mutability: "external",
+  },
+  {
+    type: "function", name: "prove_collateral",
+    inputs: [
+      { name: "user", type: "core::starknet::contract_address::ContractAddress" },
+      { name: "threshold", type: "core::integer::u256" },
+      { name: "proof", type: "core::array::Span::<core::felt252>" }, // empty for stub
+    ],
+    outputs: [{ type: "core::bool" }], state_mutability: "view",
+  },
   { type: "function", name: "get_commitment", inputs: [{ name: "user", type: "core::starknet::contract_address::ContractAddress" }], outputs: [{ type: "core::felt252" }], state_mutability: "view" },
-  { type: "function", name: "get_committed_amount", inputs: [{ name: "user", type: "core::starknet::contract_address::ContractAddress" }], outputs: [{ type: "core::integer::u256" }], state_mutability: "view" },
   { type: "function", name: "get_total_locked", inputs: [], outputs: [{ type: "core::integer::u256" }], state_mutability: "view" },
   { type: "function", name: "is_nullifier_used", inputs: [{ name: "nullifier", type: "core::felt252" }], outputs: [{ type: "core::bool" }], state_mutability: "view" },
   { type: "function", name: "is_paused", inputs: [], outputs: [{ type: "core::bool" }], state_mutability: "view" },

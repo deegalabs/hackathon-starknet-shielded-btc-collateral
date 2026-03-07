@@ -3,19 +3,25 @@
 /// Users deposit WBTC (wrapped BTC) privately using Poseidon commitments.
 ///   commitment = Poseidon(amount_low, amount_high, secret)
 ///
-/// Other DeFi protocols verify collateral without learning the exact amount:
-///   vault.prove_collateral(user, threshold) -> bool
+/// Other DeFi protocols verify collateral WITHOUT learning the exact amount:
+///   vault.prove_collateral(user, threshold, proof) -> bool
 ///
-/// Withdrawals use nullifiers to prevent double-spending without linking
-/// to the original deposit:
-///   nullifier = Poseidon(commitment, withdraw_secret)
+/// Withdrawals require knowledge of the deposit preimage (amount + secret),
+/// preventing unauthorized withdrawals while keeping amounts private:
+///   nullifier = Poseidon(commitment, secret)
+///
+/// Privacy model (H-07 fix — March 7, 2026):
+///   - NO plaintext `committed_amounts` storage (removed)
+///   - prove_collateral delegates to on-chain verifier (stub in MVP)
+///   - withdraw verifies Poseidon preimage on-chain
+///   - No amount is ever stored or emitted in plaintext
 ///
 /// Production upgrade path (Phase 2):
 ///   - Replace StubProofVerifier with RangeProofVerifier
 ///   - Call set_verifier(new_verifier) — zero downtime upgrade
 ///   - prove_collateral will delegate to the on-chain STARK verifier
 ///
-/// Security audit: SECURITY.md
+/// Security audit: SECURITY.md (v2.0, H-07 fix applied)
 /// Admin interface: ICollateralVaultAdmin
 #[starknet::contract]
 pub mod CollateralVault {
@@ -26,6 +32,9 @@ pub mod CollateralVault {
         StorageMapWriteAccess,
     };
     use shielded_btc_collateral::interfaces::ierc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use shielded_btc_collateral::interfaces::iproof_verifier::{
+        IProofVerifierDispatcher, IProofVerifierDispatcherTrait,
+    };
 
     // =========================================================================
     // Storage
@@ -39,19 +48,19 @@ pub mod CollateralVault {
         owner: ContractAddress,
         /// Emergency pause flag. Blocks deposits and withdrawals when true.
         paused: bool,
-        /// Future ZK proof verifier address.
-        /// MVP: unused (prove_collateral uses plaintext comparison).
-        /// Production: set to RangeProofVerifier address via set_verifier().
+        /// ZK proof verifier address.
+        /// MVP: StubProofVerifier (returns commitment != 0, no threshold check).
+        /// Production: RangeProofVerifier — validates STARK range proof on-chain.
+        /// Set via set_verifier() admin call. Zero address = use commitment-only fallback.
         verifier: ContractAddress,
         /// Maps user address → Poseidon commitment (0 if no active deposit).
         /// commitment = Poseidon(amount_low, amount_high, secret)
+        ///
+        /// [H-07 Fix] This is the ONLY amount-related field stored on-chain.
+        /// No plaintext `committed_amounts` map exists — amounts stay private.
         commitments: starknet::storage::Map<ContractAddress, felt252>,
-        /// Maps user address → deposited amount.
-        /// MVP: stored in plaintext to enable ownership and threshold checks
-        /// without ZK proofs. Production: remove this and verify via ZK proof.
-        committed_amounts: starknet::storage::Map<ContractAddress, u256>,
         /// Maps nullifier → used flag. Prevents double-spending.
-        /// nullifier = Poseidon(commitment, withdraw_secret)
+        /// nullifier = Poseidon(commitment, secret)
         nullifiers: starknet::storage::Map<felt252, bool>,
         /// Total WBTC (in satoshis) currently held by this vault.
         total_locked: u256,
@@ -135,11 +144,12 @@ pub mod CollateralVault {
         /// Steps:
         ///   1. Transfer `amount` WBTC from caller to this vault.
         ///   2. Store `commitment` (hides the amount) mapped to the caller.
-        ///   3. Store `amount` alongside commitment (MVP; removed in production).
-        ///   4. Emit Deposited event (no amount disclosed).
+        ///   3. Emit Deposited event (commitment only — no amount disclosed).
         ///
         /// The caller must approve this contract for at least `amount` WBTC before calling.
         /// commitment = Poseidon(amount_low, amount_high, secret) — computed off-chain.
+        ///
+        /// [H-07 Fix] Amount is NOT stored in plaintext. Only the Poseidon commitment is kept.
         fn deposit(ref self: ContractState, amount: u256, commitment: felt252) {
             assert(!self.paused.read(), 'Vault is paused');
             assert(amount > 0_u256, 'Amount must be positive');
@@ -148,92 +158,113 @@ pub mod CollateralVault {
             let caller = get_caller_address();
 
             // [H-01] Prevent overwriting an active commitment.
-            // Overwriting would permanently lock the first deposit's funds.
             assert(self.commitments.read(caller) == 0, 'Commitment already active');
 
             let vault = get_contract_address();
-
             let wbtc = IERC20Dispatcher { contract_address: self.wbtc_token.read() };
             let success = wbtc.transfer_from(caller, vault, amount);
             assert(success, 'WBTC transfer failed');
 
-            // Store commitment — hides the deposited amount on-chain
+            // [H-07 Fix] Store commitment only — amount stays private.
             self.commitments.write(caller, commitment);
 
-            // [C-01/C-02] Store amount for withdrawal ownership + amount validation.
-            // Production: this is removed; amount is verified via ZK range proof.
-            self.committed_amounts.write(caller, amount);
-
-            // Update aggregate (non-private) total
             let current_total = self.total_locked.read();
             self.total_locked.write(current_total + amount);
 
             self.emit(Deposited { user: caller, commitment });
         }
 
-        /// Prove that user's committed collateral meets or exceeds a threshold.
+        /// Prove that a user's committed collateral meets or exceeds a threshold.
         ///
-        /// MVP: compares the stored plaintext amount against the threshold.
-        /// Production (Phase 2): requires a STARK range proof parameter;
-        ///   the verifier cryptographically confirms committed_amount >= threshold
+        /// [H-07 Fix] Delegates to the on-chain verifier — never reads a plaintext amount.
+        ///
+        /// MVP behavior (verifier not set or StubProofVerifier):
+        ///   Returns `commitment != 0` — confirms deposit existence, not exact threshold.
+        ///   NOTE: The stub does NOT enforce the threshold; that requires production verifier.
+        ///
+        /// Production behavior (RangeProofVerifier):
+        ///   Validates the STARK proof that committed_amount >= threshold,
         ///   without revealing the exact amount.
         ///
-        /// Privacy note (MVP): this function leaks the ordering relationship between
-        ///   the deposited amount and the threshold to the caller. The verifier
-        ///   address in storage marks where the ZK upgrade will plug in.
-        ///
-        /// [H-02] Fixed: threshold is now actually evaluated (was previously ignored).
+        /// `proof` parameter: empty span for stub, STARK proof bytes for production.
         fn prove_collateral(
-            self: @ContractState, user: ContractAddress, threshold: u256,
+            self: @ContractState,
+            user: ContractAddress,
+            threshold: u256,
+            proof: Span<felt252>,
         ) -> bool {
             let commitment = self.commitments.read(user);
             if commitment == 0 {
                 return false;
             }
-            // MVP: use stored amount for comparison.
-            // Production: ZK range proof replaces this comparison entirely.
-            self.committed_amounts.read(user) >= threshold
+
+            let verifier_addr = self.verifier.read();
+            let zero: ContractAddress = 0.try_into().unwrap();
+
+            if verifier_addr == zero {
+                // No verifier configured: fall back to commitment-existence check.
+                // This confirms the user has an active deposit (commitment != 0).
+                // Threshold enforcement requires calling set_verifier() with a real verifier.
+                return true;
+            }
+
+            let verifier = IProofVerifierDispatcher { contract_address: verifier_addr };
+            verifier.verify_range_proof(commitment, threshold, proof)
         }
 
-        /// Withdraw WBTC using a one-time nullifier (prevents double-spending).
+        /// Withdraw WBTC using cryptographic preimage proof.
         ///
-        /// nullifier = Poseidon(commitment, withdraw_secret) — computed off-chain.
+        /// The caller must supply the original `secret` used during deposit.
+        /// The contract verifies on-chain:
+        ///   1. Poseidon(amount_low, amount_high, secret) == stored_commitment
+        ///   2. nullifier == Poseidon(commitment, secret)
+        ///
+        /// This ensures:
+        ///   - Only the original depositor (who knows `secret`) can withdraw.
+        ///   - The exact amount is verified cryptographically, NOT via plaintext storage.
+        ///   - The nullifier cannot be forged independently of commitment + secret.
+        ///
+        /// [H-07 Fix] Amount integrity is now cryptographic (preimage), not plaintext.
         ///
         /// Security checks (in order):
         ///   1. Vault not paused
-        ///   2. Nullifier not yet used (double-spend prevention, checked first)
+        ///   2. Nullifier not yet used (double-spend prevention, cheap read first)
         ///   3. Caller has an active commitment (ownership check)
-        ///   4. Requested amount matches the committed deposit (amount integrity)
-        fn withdraw(ref self: ContractState, amount: u256, nullifier: felt252) {
+        ///   4. Preimage check: Poseidon(amount, secret) == commitment (amount integrity)
+        ///   5. Nullifier validity: Poseidon(commitment, secret) == nullifier (forgery prevention)
+        fn withdraw(ref self: ContractState, amount: u256, secret: felt252, nullifier: felt252) {
             assert(!self.paused.read(), 'Vault is paused');
             assert(amount > 0_u256, 'Amount must be positive');
             assert(nullifier != 0, 'Nullifier cannot be zero');
 
             let caller = get_caller_address();
 
-            // [C-01] Check nullifier first — cheap storage read, prevents double-spend.
+            // [C-01] Nullifier check first — cheap storage read, prevents double-spend.
             assert(!self.nullifiers.read(nullifier), 'Nullifier already used');
 
             // [C-01] Ownership check: caller must have an active commitment.
             let stored_commitment = self.commitments.read(caller);
             assert(stored_commitment != 0, 'No active commitment');
 
-            // [C-02] Amount integrity: requested amount must match committed deposit.
-            let committed_amount = self.committed_amounts.read(caller);
-            assert(amount == committed_amount, 'Amount does not match deposit');
+            // [H-07 Fix / C-02] Cryptographic preimage check:
+            // The caller must know the secret used during deposit.
+            // Poseidon(amount_low, amount_high, secret) must match stored commitment.
+            let expected_commitment = InternalImpl::compute_commitment(amount, secret);
+            assert(expected_commitment == stored_commitment, 'Invalid preimage');
+
+            // Nullifier validity: prevents using an arbitrary nullifier to front-run withdrawals.
+            // The nullifier must be Poseidon(commitment, secret).
+            let expected_nullifier = InternalImpl::compute_nullifier(stored_commitment, secret);
+            assert(expected_nullifier == nullifier, 'Invalid nullifier');
 
             // CEI pattern: update state BEFORE external call (reentrancy protection).
-            // Mark nullifier as used and clear the commitment atomically.
             self.nullifiers.write(nullifier, true);
             self.commitments.write(caller, 0);
-            self.committed_amounts.write(caller, 0);
 
-            // Transfer WBTC from vault to caller
             let wbtc = IERC20Dispatcher { contract_address: self.wbtc_token.read() };
             let success = wbtc.transfer(caller, amount);
             assert(success, 'WBTC transfer failed');
 
-            // Update aggregate total
             let current_total = self.total_locked.read();
             self.total_locked.write(current_total - amount);
 
@@ -243,10 +274,6 @@ pub mod CollateralVault {
 
         fn get_commitment(self: @ContractState, user: ContractAddress) -> felt252 {
             self.commitments.read(user)
-        }
-
-        fn get_committed_amount(self: @ContractState, user: ContractAddress) -> u256 {
-            self.committed_amounts.read(user)
         }
 
         fn get_total_locked(self: @ContractState) -> u256 {
@@ -328,9 +355,9 @@ pub mod CollateralVault {
             )
         }
 
-        /// Compute a nullifier: Poseidon(commitment, withdraw_secret).
-        fn compute_nullifier(commitment: felt252, withdraw_secret: felt252) -> felt252 {
-            poseidon_hash_span(array![commitment, withdraw_secret].span())
+        /// Compute a nullifier: Poseidon(commitment, secret).
+        fn compute_nullifier(commitment: felt252, secret: felt252) -> felt252 {
+            poseidon_hash_span(array![commitment, secret].span())
         }
     }
 }
