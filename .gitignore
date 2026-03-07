@@ -1,0 +1,19 @@
+# Cairo build artifacts
+contracts/target/
+target/
+
+# Starknet Foundry cache
+contracts/.snfoundry_cache/
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/dist/
+
+# Environment
+.env
+.env.local
+
+# Editor
+.DS_Store
+*.swp
