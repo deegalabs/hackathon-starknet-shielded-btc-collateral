@@ -124,37 +124,50 @@ Marks withdrawals as used without linking them to the original deposit. Requires
 |------|---------|---------|
 | Scarb | 2.15+ | [scarb.sh](https://docs.swmansion.com/scarb/) |
 | Starknet Foundry | 0.56+ | [foundry-rs/starknet-foundry](https://github.com/foundry-rs/starknet-foundry) |
+| Katana | latest | [dojoengine.org](https://book.dojoengine.org/toolchain/katana) |
 | Node.js | 18+ | [nodejs.org](https://nodejs.org/) |
 | pnpm | 10+ | `npm i -g pnpm` |
 
-### Installation
+### 1. Build & Test
 
 ```bash
-# Clone repository
 git clone https://github.com/deegalabs/shielded-btc-collateral
-cd shielded-btc-collateral
+cd shielded-btc-collateral/contracts
 
-# Build Cairo contracts
-cd contracts
+# Build all contracts
 scarb build
 
-# Run all 68 tests
+# Run all 71 tests
 snforge test
+# → Tests: 71 passed, 0 failed
 ```
 
-### Run Locally
+### 2. Deploy to Local Devnet (one command)
 
 ```bash
-# Start Katana local node
-katana --seed 0
+# Terminal 1: start Katana devnet
+katana --accounts 3 --seed 0
 
-# Deploy contracts (local)
-cd contracts
-scarb run deploy-local
+# Terminal 2: deploy all 7 contracts
+bash scripts/deploy_devnet.sh
+# → deployment/devnet.json  (all addresses)
+# → deployment/frontend.env.devnet  (frontend config)
+```
 
-# Start frontend
-cd ../frontend
-pnpm install && pnpm dev
+### 3. Run Frontend
+
+```bash
+cp deployment/frontend.env.devnet frontend/.env
+cd frontend && pnpm install && pnpm dev
+# → http://localhost:5173
+# Connect Argent X wallet (set network to http://localhost:5050)
+```
+
+### 4. Run E2E Demo Script
+
+```bash
+# Full 10-step protocol flow from the command line
+cd contracts && npx ts-node ../scripts/demo.ts
 ```
 
 ### Deploy to Sepolia
@@ -166,11 +179,22 @@ cp scripts/.env.example scripts/.env
 
 # Automated deployment
 bash scripts/deploy_sepolia.sh
-
-# Output: deployment/sepolia.json  +  deployment/frontend.env.sepolia
+# → deployment/sepolia.json  +  deployment/frontend.env.sepolia
 ```
 
-See [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) for full deployment guide.
+See [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) for the full deployment guide.
+
+---
+
+## 📹 Demo Video
+
+**3-minute walkthrough** — [Recording in progress (deadline: March 9, 2026)]
+
+Topics:
+1. Problem: BTC privacy gap in DeFi
+2. Solution: Commitment-based private collateral
+3. Live: Private deposit → commitment animation → borrow → repay → withdraw
+4. Technical: Poseidon on-chain validation, Account Abstraction, session keys
 
 ---
 
