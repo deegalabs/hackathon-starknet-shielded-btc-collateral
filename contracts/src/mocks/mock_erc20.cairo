@@ -113,6 +113,10 @@ pub mod MockERC20 {
             recipient: ContractAddress,
             amount: u256,
         ) {
+            // [L-02] Prevent accidental token burn via transfer to zero address.
+            let zero: ContractAddress = 0.try_into().unwrap();
+            assert(recipient != zero, 'Transfer to zero address');
+
             let sender_balance = self.balances.read(sender);
             assert(sender_balance >= amount, 'ERC20: insufficient balance');
             self.balances.write(sender, sender_balance - amount);

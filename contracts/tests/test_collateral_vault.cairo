@@ -61,6 +61,10 @@ fn bob() -> ContractAddress {
     0xBB.try_into().unwrap()
 }
 
+fn attacker() -> ContractAddress {
+    0xDEAD.try_into().unwrap()
+}
+
 // =========================================================================
 // Setup helper: mint WBTC to user and approve vault
 // =========================================================================
@@ -98,6 +102,24 @@ fn test_deposit_stores_commitment() {
     stop_cheat_caller_address(vault_addr);
 
     assert(vault.get_commitment(alice()) == commitment, 'Commitment not stored');
+}
+
+#[test]
+fn test_deposit_stores_committed_amount() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+
+    let amount = 5_00000000_u256;
+    let commitment = make_commitment(amount, 0xabc_felt252);
+
+    fund_and_approve(wbtc, vault_addr, alice(), amount);
+
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, commitment);
+    stop_cheat_caller_address(vault_addr);
+
+    assert(vault.get_committed_amount(alice()) == amount, 'Committed amount not stored');
 }
 
 #[test]
@@ -166,17 +188,73 @@ fn test_deposit_zero_commitment_fails() {
     stop_cheat_caller_address(vault_addr);
 }
 
-// =========================================================================
-// PROVE COLLATERAL TESTS
-// =========================================================================
-
+// [H-01] Fix: second deposit must be rejected if commitment already active
 #[test]
-fn test_prove_collateral_returns_true_after_deposit() {
+#[should_panic(expected: 'Commitment already active')]
+fn test_deposit_prevents_commitment_overwrite() {
     let wbtc = deploy_mock_wbtc();
     let vault_addr = deploy_vault(wbtc);
     let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
 
-    let amount = 10_00000000_u256;
+    let amount = 1_00000000_u256;
+    let mock = IMockERC20Dispatcher { contract_address: wbtc };
+    mock.mint(alice(), amount * 2);
+
+    let erc20 = IERC20Dispatcher { contract_address: wbtc };
+    start_cheat_caller_address(wbtc, alice());
+    erc20.approve(vault_addr, amount * 2);
+    stop_cheat_caller_address(wbtc);
+
+    let commitment1 = make_commitment(amount, 0x111_felt252);
+    let commitment2 = make_commitment(amount, 0x222_felt252);
+
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, commitment1); // OK
+    vault.deposit(amount, commitment2); // Must revert: 'Commitment already active'
+    stop_cheat_caller_address(vault_addr);
+}
+
+// After withdrawal (commitment cleared), a new deposit must be accepted
+#[test]
+fn test_deposit_allowed_after_full_withdrawal() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+
+    let amount = 1_00000000_u256;
+    let mock = IMockERC20Dispatcher { contract_address: wbtc };
+    mock.mint(alice(), amount * 2);
+
+    let erc20 = IERC20Dispatcher { contract_address: wbtc };
+    start_cheat_caller_address(wbtc, alice());
+    erc20.approve(vault_addr, amount * 2);
+    stop_cheat_caller_address(wbtc);
+
+    let commitment1 = make_commitment(amount, 0xaaa_felt252);
+    let nullifier1 = make_nullifier(commitment1, 0xbbb_felt252);
+    let commitment2 = make_commitment(amount, 0xccc_felt252);
+
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, commitment1);
+    vault.withdraw(amount, nullifier1); // clears commitment
+    vault.deposit(amount, commitment2); // must succeed
+    stop_cheat_caller_address(vault_addr);
+
+    assert(vault.get_commitment(alice()) == commitment2, 'Second deposit not stored');
+}
+
+// =========================================================================
+// PROVE COLLATERAL TESTS
+// =========================================================================
+
+// [H-02] Fix: prove_collateral must now respect the threshold
+#[test]
+fn test_prove_collateral_passes_when_above_threshold() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+
+    let amount = 10_00000000_u256; // 10 BTC
     let commitment = make_commitment(amount, 0xabc_felt252);
 
     fund_and_approve(wbtc, vault_addr, alice(), amount);
@@ -185,9 +263,30 @@ fn test_prove_collateral_returns_true_after_deposit() {
     vault.deposit(amount, commitment);
     stop_cheat_caller_address(vault_addr);
 
-    // MVP stub: both thresholds pass since commitment is non-zero
-    assert(vault.prove_collateral(alice(), 1_50000000_u256), 'Should prove >= 1.5 BTC');
-    assert(vault.prove_collateral(alice(), 5_00000000_u256), 'Should prove >= 5 BTC');
+    assert(vault.prove_collateral(alice(), 1_50000000_u256), 'Should pass: 10 >= 1.5 BTC');
+    assert(vault.prove_collateral(alice(), 5_00000000_u256), 'Should pass: 10 >= 5 BTC');
+    assert(vault.prove_collateral(alice(), 10_00000000_u256), 'Should pass: 10 >= 10 BTC');
+}
+
+// [H-02] Fix: prove_collateral must fail when deposited amount is below threshold
+#[test]
+fn test_prove_collateral_fails_when_below_threshold() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+
+    let amount = 1_00000000_u256; // 1 BTC deposited
+    let commitment = make_commitment(amount, 0xabc_felt252);
+
+    fund_and_approve(wbtc, vault_addr, alice(), amount);
+
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, commitment);
+    stop_cheat_caller_address(vault_addr);
+
+    // Threshold is higher than deposited amount — must fail
+    assert(!vault.prove_collateral(alice(), 5_00000000_u256), 'Should fail: 1 < 5 BTC');
+    assert(!vault.prove_collateral(alice(), 2_00000000_u256), 'Should fail: 1 < 2 BTC');
 }
 
 #[test]
@@ -249,6 +348,28 @@ fn test_withdraw_marks_nullifier_as_used() {
 }
 
 #[test]
+fn test_withdraw_clears_commitment() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+
+    let amount = 1_00000000_u256;
+    let commitment = make_commitment(amount, 0x999_felt252);
+    let nullifier = make_nullifier(commitment, 0x888_felt252);
+
+    fund_and_approve(wbtc, vault_addr, alice(), amount);
+
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, commitment);
+    assert(vault.get_commitment(alice()) != 0, 'Commitment should exist');
+    vault.withdraw(amount, nullifier);
+    stop_cheat_caller_address(vault_addr);
+
+    assert(vault.get_commitment(alice()) == 0, 'Commitment should be cleared');
+    assert(vault.get_committed_amount(alice()) == 0_u256, 'Amount should be cleared');
+}
+
+#[test]
 fn test_withdraw_updates_total_locked() {
     let wbtc = deploy_mock_wbtc();
     let vault_addr = deploy_vault(wbtc);
@@ -294,8 +415,59 @@ fn test_double_spend_prevention() {
 
     start_cheat_caller_address(vault_addr, alice());
     vault.deposit(amount, commitment);
-    vault.withdraw(amount, nullifier); // First withdrawal: OK
-    vault.withdraw(amount, nullifier); // Second: must revert
+    vault.withdraw(amount, nullifier); // First withdrawal: OK (nullifier marked used, commitment cleared)
+    vault.withdraw(amount, nullifier); // Second: must revert with 'Nullifier already used'
+    stop_cheat_caller_address(vault_addr);
+}
+
+// =========================================================================
+// SECURITY: C-01 — Drain Attack Prevention (no commitment = no withdrawal)
+// =========================================================================
+
+#[test]
+#[should_panic(expected: 'No active commitment')]
+fn test_withdraw_fails_without_commitment() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+
+    // Seed the vault with Alice's deposit
+    let amount = 5_00000000_u256;
+    fund_and_approve(wbtc, vault_addr, alice(), amount);
+    let commitment = make_commitment(amount, 0x111_felt252);
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, commitment);
+    stop_cheat_caller_address(vault_addr);
+
+    // Attacker (no deposit) tries to drain
+    let attacker_nullifier = make_nullifier(0xBAD_felt252, 0xDEAD_felt252);
+    start_cheat_caller_address(vault_addr, attacker());
+    vault.withdraw(amount, attacker_nullifier); // Must revert: 'No active commitment'
+    stop_cheat_caller_address(vault_addr);
+}
+
+// =========================================================================
+// SECURITY: C-02 — Amount Mismatch Prevention
+// =========================================================================
+
+#[test]
+#[should_panic(expected: 'Amount does not match deposit')]
+fn test_withdraw_fails_with_wrong_amount() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+
+    // Alice deposits 1 BTC
+    let deposit_amount = 1_00000000_u256;
+    fund_and_approve(wbtc, vault_addr, alice(), deposit_amount);
+    let commitment = make_commitment(deposit_amount, 0x555_felt252);
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(deposit_amount, commitment);
+
+    // Alice tries to withdraw MORE than deposited — must fail
+    let nullifier = make_nullifier(commitment, 0x666_felt252);
+    let inflated_amount = 10_00000000_u256; // 10x the actual deposit
+    vault.withdraw(inflated_amount, nullifier); // Must revert: 'Amount does not match deposit'
     stop_cheat_caller_address(vault_addr);
 }
 
@@ -319,6 +491,15 @@ fn test_get_commitment_returns_zero_before_deposit() {
     let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
 
     assert(vault.get_commitment(alice()) == 0, 'Should be zero before deposit');
+}
+
+#[test]
+fn test_get_committed_amount_returns_zero_before_deposit() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+
+    assert(vault.get_committed_amount(alice()) == 0_u256, 'Should be zero before deposit');
 }
 
 #[test]
@@ -362,9 +543,15 @@ fn test_multiple_users_independent_commitments() {
     assert(vault.get_commitment(bob()) == bob_commitment, 'Wrong bob commitment');
     assert(vault.get_commitment(alice()) != vault.get_commitment(bob()), 'Commitments should differ');
 
-    // Both can prove collateral
-    assert(vault.prove_collateral(alice(), 1_u256), 'Alice should prove collateral');
-    assert(vault.prove_collateral(bob(), 1_u256), 'Bob should prove collateral');
+    // Committed amounts are independent
+    assert(vault.get_committed_amount(alice()) == alice_amount, 'Wrong alice amount');
+    assert(vault.get_committed_amount(bob()) == bob_amount, 'Wrong bob amount');
+
+    // Threshold-respecting collateral proofs
+    assert(vault.prove_collateral(alice(), 5_00000000_u256), 'Alice: 10 >= 5 BTC');
+    assert(!vault.prove_collateral(alice(), 11_00000000_u256), 'Alice: 10 < 11 BTC');
+    assert(vault.prove_collateral(bob(), 1_00000000_u256), 'Bob: 3 >= 1 BTC');
+    assert(!vault.prove_collateral(bob(), 5_00000000_u256), 'Bob: 3 < 5 BTC');
 
     // Total is sum of both deposits
     assert(
