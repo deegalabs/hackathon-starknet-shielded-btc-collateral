@@ -7,7 +7,6 @@ import {
   type ReactNode,
 } from "react";
 import { connect, disconnect as getStarknetDisconnect } from "@starknet-io/get-starknet";
-import { connect as starknetkitConnect } from "starknetkit";
 import { WebWalletConnector } from "starknetkit/webwallet";
 import { Contract, RpcProvider, type AccountInterface, type Abi } from "starknet";
 import { RPC_URL, CONTRACTS } from "@/lib/config";
@@ -110,24 +109,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   /**
    * Connect via email / passkey using Argent Web Wallet.
-   * No browser extension needed — perfect for BTC holders new to Starknet.
+   * Calls the WebWalletConnector directly — bypasses the starknetkit modal
+   * which has a version mismatch (starknetkit v3 expects starknet@^8).
+   * The connector opens the Argent Web Wallet popup on its own.
    */
   const connectEmail = useCallback(async () => {
     setIsConnecting(true);
     try {
-      const { connector, connectorData } = await starknetkitConnect({
-        connectors: [
-          new WebWalletConnector({ url: "https://web.argent.xyz" }),
-        ],
-        modalMode: "alwaysAsk",
-        dappName: "Shielded BTC Collateral",
+      const webWalletConnector = new WebWalletConnector({
+        url: "https://web.argent.xyz",
       });
 
-      if (!connector || !connectorData?.account) return;
+      const connectorData = await webWalletConnector.connect();
+      if (!connectorData?.account) return;
 
-      // Get the starknet.js AccountInterface from the connector
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const acc = await (connector as any).account(provider) as AccountInterface;
+      const acc = await (webWalletConnector as any).account(provider) as AccountInterface;
       if (!acc) return;
 
       setAccount(acc);
