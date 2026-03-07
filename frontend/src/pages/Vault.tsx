@@ -238,7 +238,7 @@ export default function Vault() {
                       Poseidon Commitment Preview
                     </span>
                   </div>
-                  {commitment && (
+                  {commitment !== null && (
                     <span className="text-xs bg-privacy/20 text-privacy px-2 py-0.5 rounded-full">
                       PRIVATE
                     </span>
@@ -270,7 +270,7 @@ export default function Vault() {
                   </div>
                 </div>
 
-                {commitment && (
+                {commitment !== null && (
                   <p className="text-xs text-muted mt-3">
                     Only this hash goes on-chain.{" "}
                     <span className="text-white">
@@ -408,7 +408,7 @@ export default function Vault() {
                         </span>
                       </div>
                     </div>
-                    {nullifier && (
+                    {nullifier !== null && (
                       <p className="text-xs text-muted mt-3">
                         This nullifier is burned after use —{" "}
                         <span className="text-white">

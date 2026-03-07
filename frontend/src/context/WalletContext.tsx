@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { connect, disconnect as getStarknetDisconnect } from "@starknet-io/get-starknet";
-import { Contract, RpcProvider, type AccountInterface } from "starknet";
+import { Contract, RpcProvider, type AccountInterface, type Abi } from "starknet";
 import { RPC_URL, CONTRACTS } from "@/lib/config";
 import {
   VAULT_ABI,
@@ -24,7 +24,6 @@ interface WalletContextType {
   isConnected: boolean;
   walletName: string | null;
   provider: RpcProvider;
-  // Contract handles (read from provider, write from account)
   contracts: {
     vault: Contract | null;
     wbtc: Contract | null;
@@ -50,27 +49,23 @@ const WalletContext = createContext<WalletContextType>({
   disconnect: async () => {},
 });
 
+function makeContract(
+  abi: Abi,
+  address: string,
+  signerOrProvider: AccountInterface | RpcProvider,
+): Contract | null {
+  if (!address) return null;
+  // starknet.js v9 uses options-object constructor
+  return new Contract({ abi, address, providerOrAccount: signerOrProvider });
+}
+
 function buildContracts(signerOrProvider: AccountInterface | RpcProvider) {
   return {
-    vault: CONTRACTS.VAULT
-      ? new Contract(VAULT_ABI as never[], CONTRACTS.VAULT, signerOrProvider)
-      : null,
-    wbtc: CONTRACTS.WBTC
-      ? new Contract(ERC20_ABI as never[], CONTRACTS.WBTC, signerOrProvider)
-      : null,
-    lending: CONTRACTS.LENDING
-      ? new Contract(LENDING_ABI as never[], CONTRACTS.LENDING, signerOrProvider)
-      : null,
-    paymaster: CONTRACTS.PAYMASTER
-      ? new Contract(PAYMASTER_ABI as never[], CONTRACTS.PAYMASTER, signerOrProvider)
-      : null,
-    skm: CONTRACTS.SESSION_KEY_MANAGER
-      ? new Contract(
-          SESSION_KEY_MANAGER_ABI as never[],
-          CONTRACTS.SESSION_KEY_MANAGER,
-          signerOrProvider,
-        )
-      : null,
+    vault: makeContract(VAULT_ABI as unknown as Abi, CONTRACTS.VAULT, signerOrProvider),
+    wbtc: makeContract(ERC20_ABI as unknown as Abi, CONTRACTS.WBTC, signerOrProvider),
+    lending: makeContract(LENDING_ABI as unknown as Abi, CONTRACTS.LENDING, signerOrProvider),
+    paymaster: makeContract(PAYMASTER_ABI as unknown as Abi, CONTRACTS.PAYMASTER, signerOrProvider),
+    skm: makeContract(SESSION_KEY_MANAGER_ABI as unknown as Abi, CONTRACTS.SESSION_KEY_MANAGER, signerOrProvider),
   };
 }
 
@@ -81,7 +76,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [contracts, setContracts] = useState(() => buildContracts(provider));
 
-  // Rebuild contracts when account changes
   useEffect(() => {
     setContracts(buildContracts(account ?? provider));
   }, [account]);
@@ -89,11 +83,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const handleConnect = useCallback(async () => {
     setIsConnecting(true);
     try {
-      const wallet = await connect({ modalMode: "alwaysAsk" });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const wallet = await connect({ modalMode: "alwaysAsk" }) as any;
       if (!wallet?.account) return;
       setAccount(wallet.account as AccountInterface);
-      setAddress(wallet.selectedAddress ?? wallet.account.address);
-      setWalletName(wallet.name ?? "Wallet");
+      setAddress((wallet.selectedAddress ?? wallet.account.address) as string);
+      setWalletName((wallet.name ?? "Wallet") as string);
     } catch (err) {
       console.error("Wallet connect failed:", err);
     } finally {
@@ -113,14 +108,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const wallet = await connect({ modalMode: "neverAsk" });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const wallet = await connect({ modalMode: "neverAsk" }) as any;
         if (wallet?.account) {
           setAccount(wallet.account as AccountInterface);
-          setAddress(wallet.selectedAddress ?? wallet.account.address);
-          setWalletName(wallet.name ?? "Wallet");
+          setAddress((wallet.selectedAddress ?? wallet.account.address) as string);
+          setWalletName((wallet.name ?? "Wallet") as string);
         }
       } catch {
-        // No wallet was previously connected — that's fine
+        // No wallet was previously connected
       }
     })();
   }, []);

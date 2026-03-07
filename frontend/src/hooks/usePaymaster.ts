@@ -11,6 +11,11 @@ export interface PaymasterState {
   error: string | null;
 }
 
+function extractU256(val: unknown): bigint {
+  const obj = val as Record<string, unknown>;
+  return obj?.low !== undefined ? BigInt(String(obj.low)) : BigInt(String(val));
+}
+
 export function usePaymaster() {
   const { account, address, contracts, provider } = useWallet();
   const [state, setState] = useState<PaymasterState>({
@@ -40,8 +45,8 @@ export function usePaymaster() {
 
       setState({
         isEligible,
-        remainingBudget: BigInt(String((budgetRaw as { low: bigint }).low ?? budgetRaw)),
-        threshold: BigInt(String((thresholdRaw as { low: bigint }).low ?? thresholdRaw)),
+        remainingBudget: extractU256(budgetRaw),
+        threshold: extractU256(thresholdRaw),
         isLoading: false,
         error: null,
       });
@@ -63,10 +68,7 @@ export function usePaymaster() {
       if (!account || !contracts.paymaster) return;
       setTx({ status: "pending", hash: null, message: "Funding budget..." });
       try {
-        const fundTx = await (contracts.paymaster.connect(account) as typeof contracts.paymaster).invoke(
-          "fund_budget",
-          [cairo.uint256(amount)],
-        );
+        const fundTx = await contracts.paymaster.invoke("fund_budget", [cairo.uint256(amount)]);
         await provider.waitForTransaction(fundTx.transaction_hash);
         setTx({ status: "success", hash: fundTx.transaction_hash, message: "Budget funded!" });
         await refresh();

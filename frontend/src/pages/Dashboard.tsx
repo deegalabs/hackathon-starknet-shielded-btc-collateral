@@ -15,8 +15,8 @@ export default function Dashboard() {
 
   const hasDeposit = vault.committedAmount > 0n;
   const utilizationPct =
-    vault.borrowLimit > 0n
-      ? Number((lending.debt * 100n) / vault.borrowLimit)
+    lending.borrowLimit > 0n
+      ? Number((lending.debt * 100n) / lending.borrowLimit)
       : 0;
 
   return (

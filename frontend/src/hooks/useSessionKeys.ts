@@ -13,6 +13,11 @@ export interface SessionKeyInfo {
   isValid: boolean;
 }
 
+function extractU256(val: unknown): bigint {
+  const obj = val as Record<string, unknown>;
+  return obj?.low !== undefined ? BigInt(String(obj.low)) : BigInt(String(val));
+}
+
 export function useSessionKeys() {
   const { account, address, contracts, provider } = useWallet();
   const [tx, setTx] = useState<TxState>({ status: "idle", hash: null, message: null });
@@ -33,15 +38,12 @@ export function useSessionKeys() {
       if (!account || !contracts.skm) return;
       setTx({ status: "pending", hash: null, message: "Registering session key..." });
       try {
-        const regTx = await (contracts.skm.connect(account) as typeof contracts.skm).invoke(
-          "register_session",
-          [
-            sessionPubKey,
-            expiryTimestamp,
-            cairo.uint256(spendingLimit),
-            allowedContract,
-          ],
-        );
+        const regTx = await contracts.skm.invoke("register_session", [
+          sessionPubKey,
+          expiryTimestamp,
+          cairo.uint256(spendingLimit),
+          allowedContract,
+        ]);
         await provider.waitForTransaction(regTx.transaction_hash);
         setTx({ status: "success", hash: regTx.transaction_hash, message: "Session key registered!" });
       } catch (err) {
@@ -57,10 +59,7 @@ export function useSessionKeys() {
       if (!account || !contracts.skm) return;
       setTx({ status: "pending", hash: null, message: "Revoking session key..." });
       try {
-        const revokeTx = await (contracts.skm.connect(account) as typeof contracts.skm).invoke(
-          "revoke_session",
-          [sessionPubKey],
-        );
+        const revokeTx = await contracts.skm.invoke("revoke_session", [sessionPubKey]);
         await provider.waitForTransaction(revokeTx.transaction_hash);
         setTx({ status: "success", hash: revokeTx.transaction_hash, message: "Session key revoked!" });
       } catch (err) {
@@ -80,13 +79,13 @@ export function useSessionKeys() {
           contracts.skm.get_session_info(address, sessionPubKey),
         ]);
         const [expiry, limit, spent, allowedContract, isActive] = info as [
-          bigint, bigint, bigint, string, boolean
+          bigint, unknown, unknown, string, boolean
         ];
         return {
           pubKey: sessionPubKey,
           expiryTimestamp: Number(expiry),
-          spendingLimit: BigInt(String((limit as { low: bigint }).low ?? limit)),
-          spent: BigInt(String((spent as { low: bigint }).low ?? spent)),
+          spendingLimit: extractU256(limit),
+          spent: extractU256(spent),
           allowedContract: String(allowedContract),
           isActive: Boolean(isActive),
           isValid: Boolean(isValid),

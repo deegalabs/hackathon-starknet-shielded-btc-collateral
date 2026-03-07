@@ -3,12 +3,12 @@ import { cairo } from "starknet";
 import { useWallet } from "@/context/WalletContext";
 
 export interface VaultState {
-  commitment: string;       // hex felt252 or "0x0"
-  committedAmount: bigint;  // satoshis
-  totalLocked: bigint;      // vault-wide total
+  commitment: string;
+  committedAmount: bigint;
+  totalLocked: bigint;
   isPaused: boolean;
-  wbtcBalance: bigint;      // user's WBTC balance
-  wbtcAllowance: bigint;    // current vault allowance
+  wbtcBalance: bigint;
+  wbtcAllowance: bigint;
   isLoading: boolean;
   error: string | null;
 }
@@ -29,6 +29,11 @@ const INITIAL_STATE: VaultState = {
   isLoading: false,
   error: null,
 };
+
+function extractU256(val: unknown): bigint {
+  const obj = val as Record<string, unknown>;
+  return obj?.low !== undefined ? BigInt(String(obj.low)) : BigInt(String(val));
+}
 
 export function useVault() {
   const { account, address, contracts, provider } = useWallet();
@@ -57,15 +62,15 @@ export function useVault() {
           contracts.wbtc.allowance(address, contracts.vault.address),
         ]);
         commitment = `0x${BigInt(String(c)).toString(16)}`;
-        committedAmount = BigInt(String((ca as { low: bigint }).low ?? ca));
-        wbtcBalance = BigInt(String((bal as { low: bigint }).low ?? bal));
-        wbtcAllowance = BigInt(String((allow as { low: bigint }).low ?? allow));
+        committedAmount = extractU256(ca);
+        wbtcBalance = extractU256(bal);
+        wbtcAllowance = extractU256(allow);
       }
 
       setState({
         commitment,
         committedAmount,
-        totalLocked: BigInt(String((totalLocked as { low: bigint }).low ?? totalLocked)),
+        totalLocked: extractU256(totalLocked),
         isPaused: Boolean(isPaused),
         wbtcBalance,
         wbtcAllowance,
@@ -90,16 +95,15 @@ export function useVault() {
       if (!account || !contracts.vault || !contracts.wbtc) return;
       setTx({ status: "pending", hash: null, message: "Approving WBTC..." });
       try {
-        // Step 1: Approve
-        const approveTx = await (contracts.wbtc.connect(account) as typeof contracts.wbtc).invoke(
+        // Contracts are built with the account in providerOrAccount (starknet.js v9)
+        const approveTx = await contracts.wbtc.invoke(
           "approve",
           [contracts.vault.address, cairo.uint256(amount)],
         );
         await provider.waitForTransaction(approveTx.transaction_hash);
         setTx({ status: "pending", hash: approveTx.transaction_hash, message: "Depositing..." });
 
-        // Step 2: Deposit
-        const depositTx = await (contracts.vault.connect(account) as typeof contracts.vault).invoke(
+        const depositTx = await contracts.vault.invoke(
           "deposit",
           [cairo.uint256(amount), `0x${commitment.toString(16)}`],
         );
@@ -119,7 +123,7 @@ export function useVault() {
       if (!account || !contracts.vault) return;
       setTx({ status: "pending", hash: null, message: "Withdrawing..." });
       try {
-        const withdrawTx = await (contracts.vault.connect(account) as typeof contracts.vault).invoke(
+        const withdrawTx = await contracts.vault.invoke(
           "withdraw",
           [cairo.uint256(amount), `0x${nullifier.toString(16)}`],
         );

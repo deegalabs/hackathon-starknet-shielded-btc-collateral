@@ -12,6 +12,11 @@ export interface LendingState {
   error: string | null;
 }
 
+function extractU256(val: unknown): bigint {
+  const obj = val as Record<string, unknown>;
+  return obj?.low !== undefined ? BigInt(String(obj.low)) : BigInt(String(val));
+}
+
 export function useLending() {
   const { account, address, contracts, provider } = useWallet();
   const [state, setState] = useState<LendingState>({
@@ -40,15 +45,15 @@ export function useLending() {
           contracts.lending.get_debt(address),
           contracts.lending.get_borrow_limit(address),
         ]);
-        debt = BigInt(String((debtRaw as { low: bigint }).low ?? debtRaw));
-        borrowLimit = BigInt(String((limitRaw as { low: bigint }).low ?? limitRaw));
+        debt = extractU256(debtRaw);
+        borrowLimit = extractU256(limitRaw);
       }
 
       setState({
         debt,
         borrowLimit,
         ltvRatio: Number(ltvRaw),
-        totalBorrowed: BigInt(String((totalRaw as { low: bigint }).low ?? totalRaw)),
+        totalBorrowed: extractU256(totalRaw),
         isLoading: false,
         error: null,
       });
@@ -70,10 +75,7 @@ export function useLending() {
       if (!account || !contracts.lending) return;
       setTx({ status: "pending", hash: null, message: "Borrowing..." });
       try {
-        const borrowTx = await (contracts.lending.connect(account) as typeof contracts.lending).invoke(
-          "borrow",
-          [cairo.uint256(amount)],
-        );
+        const borrowTx = await contracts.lending.invoke("borrow", [cairo.uint256(amount)]);
         await provider.waitForTransaction(borrowTx.transaction_hash);
         setTx({ status: "success", hash: borrowTx.transaction_hash, message: "Borrow confirmed!" });
         await refresh();
@@ -90,10 +92,7 @@ export function useLending() {
       if (!account || !contracts.lending) return;
       setTx({ status: "pending", hash: null, message: "Repaying..." });
       try {
-        const repayTx = await (contracts.lending.connect(account) as typeof contracts.lending).invoke(
-          "repay",
-          [cairo.uint256(amount)],
-        );
+        const repayTx = await contracts.lending.invoke("repay", [cairo.uint256(amount)]);
         await provider.waitForTransaction(repayTx.transaction_hash);
         setTx({ status: "success", hash: repayTx.transaction_hash, message: "Repay confirmed!" });
         await refresh();
