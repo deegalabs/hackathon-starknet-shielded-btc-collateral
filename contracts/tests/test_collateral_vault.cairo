@@ -7,6 +7,9 @@ use starknet::ContractAddress;
 use shielded_btc_collateral::interfaces::icollateral_vault::{
     ICollateralVaultDispatcher, ICollateralVaultDispatcherTrait,
 };
+use shielded_btc_collateral::interfaces::icollateral_vault_admin::{
+    ICollateralVaultAdminDispatcher, ICollateralVaultAdminDispatcherTrait,
+};
 use shielded_btc_collateral::interfaces::ierc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 
 // =========================================================================
@@ -32,7 +35,9 @@ fn deploy_mock_wbtc() -> ContractAddress {
 
 fn deploy_vault(wbtc_address: ContractAddress) -> ContractAddress {
     let contract = declare("CollateralVault").unwrap().contract_class();
-    let calldata = array![wbtc_address.into()];
+    // constructor(wbtc_token, owner) — use a fixed owner address in tests
+    let owner: ContractAddress = 0x4AD.try_into().unwrap();
+    let calldata = array![wbtc_address.into(), owner.into()];
     let (address, _) = contract.deploy(@calldata).unwrap();
     address
 }
@@ -557,4 +562,154 @@ fn test_multiple_users_independent_commitments() {
     assert(
         vault.get_total_locked() == alice_amount + bob_amount, 'Total should be sum',
     );
+}
+
+// =========================================================================
+// ADMIN: PAUSE / UNPAUSE TESTS
+// =========================================================================
+
+fn admin() -> ContractAddress {
+    0x4AD.try_into().unwrap()
+}
+
+#[test]
+fn test_vault_starts_unpaused() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+    assert(!vault.is_paused(), 'Vault should start unpaused');
+}
+
+#[test]
+fn test_owner_can_pause_and_unpause() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+    let admin_iface = ICollateralVaultAdminDispatcher { contract_address: vault_addr };
+
+    start_cheat_caller_address(vault_addr, admin());
+    admin_iface.pause();
+    stop_cheat_caller_address(vault_addr);
+
+    assert(vault.is_paused(), 'Vault should be paused');
+
+    start_cheat_caller_address(vault_addr, admin());
+    admin_iface.unpause();
+    stop_cheat_caller_address(vault_addr);
+
+    assert(!vault.is_paused(), 'Vault should be unpaused');
+}
+
+#[test]
+#[should_panic(expected: 'Only owner')]
+fn test_non_owner_cannot_pause() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let admin_iface = ICollateralVaultAdminDispatcher { contract_address: vault_addr };
+
+    start_cheat_caller_address(vault_addr, alice()); // alice is NOT the owner
+    admin_iface.pause();
+    stop_cheat_caller_address(vault_addr);
+}
+
+#[test]
+#[should_panic(expected: 'Vault is paused')]
+fn test_deposit_fails_when_paused() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+    let admin_iface = ICollateralVaultAdminDispatcher { contract_address: vault_addr };
+
+    // Pause the vault
+    start_cheat_caller_address(vault_addr, admin());
+    admin_iface.pause();
+    stop_cheat_caller_address(vault_addr);
+
+    let amount = 1_00000000_u256;
+    fund_and_approve(wbtc, vault_addr, alice(), amount);
+    let commitment = make_commitment(amount, 0x1_felt252);
+
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, commitment); // Must revert: 'Vault is paused'
+    stop_cheat_caller_address(vault_addr);
+}
+
+#[test]
+#[should_panic(expected: 'Vault is paused')]
+fn test_withdraw_fails_when_paused() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+    let admin_iface = ICollateralVaultAdminDispatcher { contract_address: vault_addr };
+
+    let amount = 1_00000000_u256;
+    let commitment = make_commitment(amount, 0xf00_felt252);
+    let nullifier = make_nullifier(commitment, 0xbaa_felt252);
+
+    fund_and_approve(wbtc, vault_addr, alice(), amount);
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, commitment);
+    stop_cheat_caller_address(vault_addr);
+
+    // Pause the vault after deposit
+    start_cheat_caller_address(vault_addr, admin());
+    admin_iface.pause();
+    stop_cheat_caller_address(vault_addr);
+
+    // Withdrawal must fail while paused
+    start_cheat_caller_address(vault_addr, alice());
+    vault.withdraw(amount, nullifier); // Must revert: 'Vault is paused'
+    stop_cheat_caller_address(vault_addr);
+}
+
+#[test]
+fn test_prove_collateral_works_when_paused() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+    let admin_iface = ICollateralVaultAdminDispatcher { contract_address: vault_addr };
+
+    let amount = 5_00000000_u256;
+    let commitment = make_commitment(amount, 0xcafe_felt252);
+    fund_and_approve(wbtc, vault_addr, alice(), amount);
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, commitment);
+    stop_cheat_caller_address(vault_addr);
+
+    // Pause vault — but prove_collateral must still work (DeFi integrators need it)
+    start_cheat_caller_address(vault_addr, admin());
+    admin_iface.pause();
+    stop_cheat_caller_address(vault_addr);
+
+    assert(vault.prove_collateral(alice(), 1_00000000_u256), 'Proof should work when paused');
+}
+
+#[test]
+fn test_ownership_transfer() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let admin_iface = ICollateralVaultAdminDispatcher { contract_address: vault_addr };
+
+    let new_owner: ContractAddress = 0x4E0.try_into().unwrap();
+
+    start_cheat_caller_address(vault_addr, admin());
+    admin_iface.transfer_ownership(new_owner);
+    stop_cheat_caller_address(vault_addr);
+
+    assert(admin_iface.get_owner() == new_owner, 'Ownership not transferred');
+}
+
+#[test]
+fn test_set_verifier() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let admin_iface = ICollateralVaultAdminDispatcher { contract_address: vault_addr };
+
+    let verifier_addr: ContractAddress = 0xFFF.try_into().unwrap();
+
+    start_cheat_caller_address(vault_addr, admin());
+    admin_iface.set_verifier(verifier_addr);
+    stop_cheat_caller_address(vault_addr);
+
+    assert(admin_iface.get_verifier() == verifier_addr, 'Verifier not set');
 }
