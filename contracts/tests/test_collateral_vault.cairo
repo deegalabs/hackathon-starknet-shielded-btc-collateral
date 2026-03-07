@@ -930,3 +930,130 @@ fn test_deposit_with_valid_on_chain_commitment() {
     let stored = vault.get_commitment(alice());
     assert(stored == commitment, 'On-chain commitment must match');
 }
+
+// =========================================================================
+// EDGE CASE & SECURITY TESTS (Phase 3 — March 8, 2026)
+// Additional coverage for cross-user isolation, zero-value guards, and
+// boundary conditions identified in the security review.
+// =========================================================================
+
+/// [Security] Bob cannot withdraw using Alice's commitment.
+/// Cross-user isolation: caller must have an active commitment.
+#[test]
+#[should_panic(expected: 'No active commitment')]
+fn test_cross_user_withdrawal_isolation() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+
+    let amount = 1_00000000_u256;
+    let alice_secret = 0xA11CE_felt252;
+    let alice_commitment = make_commitment(amount, alice_secret);
+    let alice_nullifier = make_nullifier(alice_commitment, alice_secret);
+
+    fund_and_approve(wbtc, vault_addr, alice(), amount);
+
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, alice_secret, alice_commitment);
+    stop_cheat_caller_address(vault_addr);
+
+    // Bob knows Alice's secret+nullifier but has NO deposit of his own
+    // → must revert at 'No active commitment' (caller is Bob, not Alice)
+    start_cheat_caller_address(vault_addr, bob());
+    vault.withdraw(amount, alice_secret, alice_nullifier); // Must panic
+    stop_cheat_caller_address(vault_addr);
+}
+
+/// [Edge case] Zero nullifier is explicitly rejected before storage lookup.
+#[test]
+#[should_panic(expected: 'Nullifier cannot be zero')]
+fn test_withdraw_rejects_zero_nullifier() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+
+    let amount = 1_00000000_u256;
+    let secret = 0x1_felt252;
+    let commitment = make_commitment(amount, secret);
+
+    fund_and_approve(wbtc, vault_addr, alice(), amount);
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, secret, commitment);
+    vault.withdraw(amount, secret, 0); // zero nullifier must be rejected
+    stop_cheat_caller_address(vault_addr);
+}
+
+/// [Edge case] Deposit fails when user has insufficient WBTC balance.
+#[test]
+#[should_panic]
+fn test_deposit_fails_with_insufficient_balance() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+
+    let amount = 10_00000000_u256;
+    let secret = 0x1_felt252;
+    let commitment = make_commitment(amount, secret);
+
+    // Fund alice with only 1 BTC but try to deposit 10 BTC
+    let mock = IMockERC20Dispatcher { contract_address: wbtc };
+    mock.mint(alice(), 1_00000000_u256);
+
+    let erc20 = IERC20Dispatcher { contract_address: wbtc };
+    start_cheat_caller_address(wbtc, alice());
+    erc20.approve(vault_addr, amount);
+    stop_cheat_caller_address(wbtc);
+
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, secret, commitment); // Must panic: insufficient balance
+    stop_cheat_caller_address(vault_addr);
+}
+
+/// [Security] prove_collateral is always readable regardless of who calls it.
+/// Any protocol can verify any user's collateral without special permissions.
+#[test]
+fn test_prove_collateral_is_permissionless() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+
+    let amount = 5_00000000_u256;
+    let secret = 0xABC_felt252;
+    let commitment = make_commitment(amount, secret);
+
+    fund_and_approve(wbtc, vault_addr, alice(), amount);
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, secret, commitment);
+    stop_cheat_caller_address(vault_addr);
+
+    // Bob (a lending protocol) can check Alice's collateral without special permissions
+    start_cheat_caller_address(vault_addr, bob());
+    let result = vault.prove_collateral(alice(), 1_u256, array![].span());
+    stop_cheat_caller_address(vault_addr);
+
+    assert(result, 'Permissionless: Bob can verify');
+}
+
+/// [Edge case] Small amount (1 satoshi) deposit and withdrawal works correctly.
+#[test]
+fn test_deposit_and_withdraw_one_satoshi() {
+    let wbtc = deploy_mock_wbtc();
+    let vault_addr = deploy_vault(wbtc);
+    let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
+    let erc20 = IERC20Dispatcher { contract_address: wbtc };
+
+    let amount = 1_u256; // 1 satoshi
+    let secret = 0x1_felt252;
+    let commitment = make_commitment(amount, secret);
+    let nullifier = make_nullifier(commitment, secret);
+
+    fund_and_approve(wbtc, vault_addr, alice(), amount);
+
+    start_cheat_caller_address(vault_addr, alice());
+    vault.deposit(amount, secret, commitment);
+    vault.withdraw(amount, secret, nullifier);
+    stop_cheat_caller_address(vault_addr);
+
+    assert(erc20.balance_of(alice()) == amount, 'Should receive 1 satoshi back');
+    assert(vault.get_total_locked() == 0_u256, 'Vault should be empty');
+}
