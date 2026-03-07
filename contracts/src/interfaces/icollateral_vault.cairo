@@ -37,4 +37,7 @@ pub trait ICollateralVault<TContractState> {
 
     /// Returns true if a nullifier has already been used.
     fn is_nullifier_used(self: @TContractState, nullifier: felt252) -> bool;
+
+    /// Returns true if the vault is currently paused (no deposits/withdrawals).
+    fn is_paused(self: @TContractState) -> bool;
 }

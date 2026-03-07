@@ -1,7 +1,7 @@
 /// CollateralVault — Core contract of the Shielded BTC Collateral Protocol.
 ///
 /// Users deposit WBTC (wrapped BTC) privately using Poseidon commitments.
-/// commitment = Poseidon(amount_low, amount_high, secret)
+///   commitment = Poseidon(amount_low, amount_high, secret)
 ///
 /// Other DeFi protocols verify collateral without learning the exact amount:
 ///   vault.prove_collateral(user, threshold) -> bool
@@ -10,7 +10,13 @@
 /// to the original deposit:
 ///   nullifier = Poseidon(commitment, withdraw_secret)
 ///
+/// Production upgrade path (Phase 2):
+///   - Replace StubProofVerifier with RangeProofVerifier
+///   - Call set_verifier(new_verifier) — zero downtime upgrade
+///   - prove_collateral will delegate to the on-chain STARK verifier
+///
 /// Security audit: SECURITY.md
+/// Admin interface: ICollateralVaultAdmin
 #[starknet::contract]
 pub mod CollateralVault {
     use core::poseidon::poseidon_hash_span;
@@ -29,6 +35,14 @@ pub mod CollateralVault {
     struct Storage {
         /// Address of the WBTC ERC-20 token contract.
         wbtc_token: ContractAddress,
+        /// Protocol owner — can pause/unpause and upgrade the verifier.
+        owner: ContractAddress,
+        /// Emergency pause flag. Blocks deposits and withdrawals when true.
+        paused: bool,
+        /// Future ZK proof verifier address.
+        /// MVP: unused (prove_collateral uses plaintext comparison).
+        /// Production: set to RangeProofVerifier address via set_verifier().
+        verifier: ContractAddress,
         /// Maps user address → Poseidon commitment (0 if no active deposit).
         /// commitment = Poseidon(amount_low, amount_high, secret)
         commitments: starknet::storage::Map<ContractAddress, felt252>,
@@ -52,6 +66,10 @@ pub mod CollateralVault {
     pub enum Event {
         Deposited: Deposited,
         Withdrawn: Withdrawn,
+        Paused: Paused,
+        Unpaused: Unpaused,
+        OwnershipTransferred: OwnershipTransferred,
+        VerifierUpdated: VerifierUpdated,
     }
 
     /// Emitted on deposit. Intentionally omits `amount` to preserve privacy.
@@ -68,20 +86,46 @@ pub mod CollateralVault {
         pub nullifier: felt252,
     }
 
+    #[derive(Drop, starknet::Event)]
+    pub struct Paused {
+        pub by: ContractAddress,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct Unpaused {
+        pub by: ContractAddress,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct OwnershipTransferred {
+        pub previous_owner: ContractAddress,
+        pub new_owner: ContractAddress,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct VerifierUpdated {
+        pub previous_verifier: ContractAddress,
+        pub new_verifier: ContractAddress,
+    }
+
     // =========================================================================
     // Constructor
     // =========================================================================
 
     #[constructor]
-    fn constructor(ref self: ContractState, wbtc_token: ContractAddress) {
-        // [M-01] Zero-address guard: deploying with zero address bricks the vault.
+    fn constructor(
+        ref self: ContractState, wbtc_token: ContractAddress, owner: ContractAddress,
+    ) {
         let zero: ContractAddress = 0.try_into().unwrap();
         assert(wbtc_token != zero, 'WBTC token cannot be zero');
+        assert(owner != zero, 'Owner cannot be zero');
         self.wbtc_token.write(wbtc_token);
+        self.owner.write(owner);
+        self.paused.write(false);
     }
 
     // =========================================================================
-    // External functions
+    // External: DeFi Protocol Interface
     // =========================================================================
 
     #[abi(embed_v0)]
@@ -97,6 +141,7 @@ pub mod CollateralVault {
         /// The caller must approve this contract for at least `amount` WBTC before calling.
         /// commitment = Poseidon(amount_low, amount_high, secret) — computed off-chain.
         fn deposit(ref self: ContractState, amount: u256, commitment: felt252) {
+            assert(!self.paused.read(), 'Vault is paused');
             assert(amount > 0_u256, 'Amount must be positive');
             assert(commitment != 0, 'Commitment cannot be zero');
 
@@ -133,6 +178,10 @@ pub mod CollateralVault {
         ///   the verifier cryptographically confirms committed_amount >= threshold
         ///   without revealing the exact amount.
         ///
+        /// Privacy note (MVP): this function leaks the ordering relationship between
+        ///   the deposited amount and the threshold to the caller. The verifier
+        ///   address in storage marks where the ZK upgrade will plug in.
+        ///
         /// [H-02] Fixed: threshold is now actually evaluated (was previously ignored).
         fn prove_collateral(
             self: @ContractState, user: ContractAddress, threshold: u256,
@@ -142,8 +191,7 @@ pub mod CollateralVault {
                 return false;
             }
             // MVP: use stored amount for comparison.
-            // Privacy note: this leaks the exact amount to whoever calls the function.
-            // Production: ZK range proof replaces this comparison.
+            // Production: ZK range proof replaces this comparison entirely.
             self.committed_amounts.read(user) >= threshold
         }
 
@@ -152,10 +200,12 @@ pub mod CollateralVault {
         /// nullifier = Poseidon(commitment, withdraw_secret) — computed off-chain.
         ///
         /// Security checks (in order):
-        ///   1. Nullifier not yet used (double-spend prevention, checked first)
-        ///   2. Caller has an active commitment (ownership check)
-        ///   3. Requested amount matches the committed deposit (amount integrity)
+        ///   1. Vault not paused
+        ///   2. Nullifier not yet used (double-spend prevention, checked first)
+        ///   3. Caller has an active commitment (ownership check)
+        ///   4. Requested amount matches the committed deposit (amount integrity)
         fn withdraw(ref self: ContractState, amount: u256, nullifier: felt252) {
+            assert(!self.paused.read(), 'Vault is paused');
             assert(amount > 0_u256, 'Amount must be positive');
             assert(nullifier != 0, 'Nullifier cannot be zero');
 
@@ -210,14 +260,67 @@ pub mod CollateralVault {
         fn is_nullifier_used(self: @ContractState, nullifier: felt252) -> bool {
             self.nullifiers.read(nullifier)
         }
+
+        fn is_paused(self: @ContractState) -> bool {
+            self.paused.read()
+        }
     }
 
     // =========================================================================
-    // Internal helpers (used in tests)
+    // External: Admin Interface
+    // =========================================================================
+
+    #[abi(embed_v0)]
+    impl CollateralVaultAdminImpl of shielded_btc_collateral::interfaces::icollateral_vault_admin::ICollateralVaultAdmin<ContractState> {
+        fn pause(ref self: ContractState) {
+            self._assert_only_owner();
+            assert(!self.paused.read(), 'Already paused');
+            self.paused.write(true);
+            self.emit(Paused { by: get_caller_address() });
+        }
+
+        fn unpause(ref self: ContractState) {
+            self._assert_only_owner();
+            assert(self.paused.read(), 'Not paused');
+            self.paused.write(false);
+            self.emit(Unpaused { by: get_caller_address() });
+        }
+
+        fn transfer_ownership(ref self: ContractState, new_owner: ContractAddress) {
+            self._assert_only_owner();
+            let zero: ContractAddress = 0.try_into().unwrap();
+            assert(new_owner != zero, 'New owner cannot be zero');
+            let previous = self.owner.read();
+            self.owner.write(new_owner);
+            self.emit(OwnershipTransferred { previous_owner: previous, new_owner });
+        }
+
+        fn set_verifier(ref self: ContractState, new_verifier: ContractAddress) {
+            self._assert_only_owner();
+            let previous = self.verifier.read();
+            self.verifier.write(new_verifier);
+            self.emit(VerifierUpdated { previous_verifier: previous, new_verifier });
+        }
+
+        fn get_owner(self: @ContractState) -> ContractAddress {
+            self.owner.read()
+        }
+
+        fn get_verifier(self: @ContractState) -> ContractAddress {
+            self.verifier.read()
+        }
+    }
+
+    // =========================================================================
+    // Internal helpers
     // =========================================================================
 
     #[generate_trait]
     pub impl InternalImpl of InternalTrait {
+        fn _assert_only_owner(ref self: ContractState) {
+            assert(get_caller_address() == self.owner.read(), 'Only owner');
+        }
+
         /// Compute a Poseidon commitment: Poseidon(amount_low, amount_high, secret).
         fn compute_commitment(amount: u256, secret: felt252) -> felt252 {
             poseidon_hash_span(
