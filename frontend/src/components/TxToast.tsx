@@ -1,7 +1,14 @@
 import { useEffect } from "react";
-import { CheckCircle, XCircle, Loader2, X } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, X, ExternalLink } from "lucide-react";
 import { clsx } from "clsx";
 import type { TxState } from "@/hooks/useVault";
+import { NETWORK } from "@/lib/config";
+
+function starkscanUrl(hash: string): string | null {
+  if (NETWORK === "mainnet") return `https://starkscan.co/tx/${hash}`;
+  if (NETWORK === "sepolia") return `https://sepolia.starkscan.co/tx/${hash}`;
+  return null;
+}
 
 interface TxToastProps {
   tx: TxState;
@@ -40,11 +47,25 @@ export function TxToast({ tx, onClose }: TxToastProps) {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm text-white font-medium">{tx.message}</p>
-          {tx.hash && (
-            <p className="text-xs text-muted font-mono mt-0.5 truncate" title={tx.hash}>
-              Tx: {tx.hash.slice(0, 18)}...
-            </p>
-          )}
+          {tx.hash && (() => {
+            const url = starkscanUrl(tx.hash);
+            return url ? (
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs text-stark hover:text-white font-mono mt-0.5 transition-colors"
+                title={tx.hash}
+              >
+                Tx: {tx.hash.slice(0, 18)}…
+                <ExternalLink size={10} className="flex-shrink-0" />
+              </a>
+            ) : (
+              <p className="text-xs text-muted font-mono mt-0.5 truncate" title={tx.hash}>
+                Tx: {tx.hash.slice(0, 18)}…
+              </p>
+            );
+          })()}
         </div>
         {tx.status !== "pending" && (
           <button

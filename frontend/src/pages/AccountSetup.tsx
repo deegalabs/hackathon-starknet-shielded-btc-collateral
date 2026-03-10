@@ -29,6 +29,7 @@ import {
 import { clsx } from "clsx";
 import { useWallet } from "@/context/WalletContext";
 import { useShieldedAccount } from "@/hooks/useShieldedAccount";
+import { WalletButton } from "@/components/WalletButton";
 import { SHIELDED_ACCOUNT_CLASS_HASH, CONTRACTS, NETWORK, RPC_URL, shortAddr } from "@/lib/config";
 import { PageShell } from "@/components/PageShell";
 
@@ -247,13 +248,16 @@ export default function AccountSetup() {
 
       {/* Wallet required */}
       {!account && (
-        <div className="flex items-start gap-3 p-4 rounded-xl bg-surface border border-border">
-          <UserCheck size={16} className="text-muted flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-muted">
-            Connect a wallet first (top-right button). Your signer account will
-            pay for the deployment — the ShieldedAccount becomes your protocol
-            account afterwards.
-          </p>
+        <div className="flex items-start gap-4 p-5 rounded-xl bg-surface border border-border">
+          <UserCheck size={18} className="text-muted flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-white mb-1">Wallet connection required</p>
+            <p className="text-sm text-muted mb-4">
+              Connect Argent X or Braavos — your signer account pays for the
+              deployment. The ShieldedAccount becomes your protocol account afterwards.
+            </p>
+            <WalletButton />
+          </div>
         </div>
       )}
 

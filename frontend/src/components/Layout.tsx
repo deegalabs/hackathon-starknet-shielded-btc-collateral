@@ -20,8 +20,8 @@ const CORE_NAV = [
 ];
 
 const SETTINGS_NAV = [
-  { to: "/account", icon: UserCheck, label: "My Account" },
-  { to: "/session-keys", icon: KeyRound, label: "Session Keys" },
+  { to: "/account", icon: UserCheck, label: "My Account", badge: undefined },
+  { to: "/session-keys", icon: KeyRound, label: "Session Keys", badge: "SNIP-9" },
 ];
 
 const ECOSYSTEM_NAV = [
@@ -151,8 +151,8 @@ export function Layout() {
           <div>
             <SectionLabel>Account</SectionLabel>
             <div className="space-y-0.5">
-              {SETTINGS_NAV.map(({ to, icon, label }) => (
-                <NavItem key={to} to={to} icon={icon} label={label} />
+              {SETTINGS_NAV.map(({ to, icon, label, badge }) => (
+                <NavItem key={to} to={to} icon={icon} label={label} badge={badge} />
               ))}
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { Bitcoin, Lock, Zap, ShieldCheck, ArrowRight, Layers } from "lucide-react";
+import { Bitcoin, Lock, Zap, ShieldCheck, ArrowRight, Layers, CheckCircle2, Circle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { StatCard } from "@/components/StatCard";
 import { PageShell } from "@/components/PageShell";
@@ -78,6 +78,42 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Onboarding checklist — shown only when connected but no deposit yet */}
+      {isConnected && !hasDeposit && (
+        <div className="rounded-xl border border-stark/20 bg-stark/5 p-5">
+          <p className="text-xs font-semibold text-stark uppercase tracking-widest mb-4">
+            Getting Started
+          </p>
+          <div className="space-y-3">
+            {[
+              { label: "Connect wallet", done: true, to: null },
+              { label: "Deposit BTC into the Vault", done: false, to: "/vault" },
+              { label: "Borrow or enable gas sponsorship", done: false, to: "/lending" },
+            ].map(({ label, done, to }, i) => (
+              <div key={i} className="flex items-center gap-3">
+                {done ? (
+                  <CheckCircle2 size={16} className="text-privacy flex-shrink-0" />
+                ) : (
+                  <Circle size={16} className="text-muted flex-shrink-0" />
+                )}
+                {to ? (
+                  <Link
+                    to={to}
+                    className={`text-sm transition-colors ${done ? "text-muted line-through" : "text-white hover:text-stark"}`}
+                  >
+                    {label}
+                  </Link>
+                ) : (
+                  <span className={`text-sm ${done ? "text-muted line-through" : "text-white"}`}>
+                    {label}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Quick actions */}
       {isConnected ? (

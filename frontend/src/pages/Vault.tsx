@@ -119,7 +119,7 @@ export default function Vault() {
     >
 
       {/* Stats row */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard
           title="WBTC Balance"
           value={`${satsToBtc(state.wbtcBalance)} BTC`}
@@ -343,9 +343,16 @@ export default function Vault() {
                 <div className="text-center py-8">
                   <Lock size={32} className="text-muted mx-auto mb-3" />
                   <p className="text-sm text-muted">No active commitment.</p>
-                  <p className="text-xs text-muted mt-1">
-                    Make a deposit first.
+                  <p className="text-xs text-muted mt-1 mb-5">
+                    Make a deposit first to enable withdrawal.
                   </p>
+                  <button
+                    onClick={() => setTab("deposit")}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-btc/10 border border-btc/30 text-btc text-sm font-medium hover:bg-btc/20 transition-colors"
+                  >
+                    <Lock size={13} />
+                    Go to Deposit
+                  </button>
                 </div>
               ) : (
                 <>
