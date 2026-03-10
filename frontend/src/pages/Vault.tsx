@@ -272,7 +272,7 @@ export default function Vault() {
                       className={commitment ? "text-privacy" : "text-muted"}
                     />
                     <span className="text-xs font-medium text-muted uppercase tracking-wider">
-                      Poseidon Commitment Preview
+                      Commitment Preview
                     </span>
                   </div>
                   {commitment !== null && (
@@ -298,21 +298,25 @@ export default function Vault() {
                     </span>
                   </div>
                   <div className="border-t border-border/50 pt-2 flex justify-between">
-                    <span className="text-muted">
-                      commitment = Poseidon(↑)
-                    </span>
+                    <span className="text-muted">Stark commitment (Poseidon)</span>
                     <span className="text-privacy">
                       {commitment ? shortHash(commitment) : "—"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted">BN254 commitment (ZK proofs)</span>
+                    <span className="text-stark text-[10px]">
+                      computed on deposit
                     </span>
                   </div>
                 </div>
 
                 {commitment !== null && (
                   <p className="text-xs text-muted mt-3">
-                    Only this hash goes on-chain.{" "}
-                    <span className="text-white">
-                      Nobody can learn your deposit amount from it.
-                    </span>
+                    Two commitments stored:{" "}
+                    <span className="text-white">Stark</span> for withdrawals,{" "}
+                    <span className="text-stark">BN254</span> for ZK range proofs.
+                    Neither reveals your amount.
                   </p>
                 )}
               </div>

@@ -2,9 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { cairo } from "starknet";
 import { useWallet } from "@/context/WalletContext";
 import { waitTx } from "@/lib/tx";
+import { computeBN254Commitment } from "@/lib/zk";
 
 export interface VaultState {
   commitment: string;
+  /** BN254-field commitment stored for ZK range proofs. "0x0" if none. */
+  bn254Commitment: string;
   totalLocked: bigint;
   isPaused: boolean;
   wbtcBalance: bigint;
@@ -21,6 +24,7 @@ export interface TxState {
 
 const INITIAL_STATE: VaultState = {
   commitment: "0x0",
+  bn254Commitment: "0x0",
   totalLocked: 0n,
   isPaused: false,
   wbtcBalance: 0n,
@@ -52,20 +56,25 @@ export function useVault() {
       let wbtcBalance = 0n;
       let wbtcAllowance = 0n;
 
+      let bn254Commitment = "0x0";
+
       if (address) {
         // [H-07 Fix] get_committed_amount removed — amounts are private (commitment-only).
-        const [c, bal, allow] = await Promise.all([
+        const [c, bn254c, bal, allow] = await Promise.all([
           contracts.vault.get_commitment(address),
+          contracts.vault.get_bn254_commitment(address),
           contracts.wbtc.balance_of(address),
           contracts.wbtc.allowance(address, contracts.vault.address),
         ]);
         commitment = `0x${BigInt(String(c)).toString(16)}`;
+        bn254Commitment = `0x${BigInt(String(bn254c)).toString(16)}`;
         wbtcBalance = extractU256(bal);
         wbtcAllowance = extractU256(allow);
       }
 
       setState({
         commitment,
+        bn254Commitment,
         totalLocked: extractU256(totalLocked),
         isPaused: Boolean(isPaused),
         wbtcBalance,
@@ -87,15 +96,24 @@ export function useVault() {
   }, [refresh]);
 
   /**
-   * Deposit WBTC with on-chain Poseidon commitment validation.
-   * The contract validates: compute_commitment(amount, secret) == commitment
-   * This removes trust in frontend hash computation — the Cairo contract enforces it.
+   * Deposit WBTC with dual-field Poseidon commitment.
+   *
+   * Computes:
+   *   stark_commitment = Poseidon_Stark(amount_low, amount_high, secret) [validated on-chain]
+   *   bn254_commitment = Poseidon2_BN254([amount, secret, 0, 0], t=4)[0] [for ZK range proofs]
+   *
+   * The `secret` (hex string) should be saved by the user — needed for future withdrawals.
    */
   const deposit = useCallback(
     async (amount: bigint, secret: bigint, commitment: bigint) => {
       if (!account || !contracts.vault || !contracts.wbtc) return;
-      setTx({ status: "pending", hash: null, message: "Approving WBTC..." });
+      setTx({ status: "pending", hash: null, message: "Computing ZK commitment..." });
       try {
+        // Compute BN254 Poseidon2 commitment for ZK range proofs (uses noir_js circuit)
+        const secretHex = `0x${secret.toString(16).padStart(62, "0")}`;
+        const bn254Commitment = await computeBN254Commitment(amount, secretHex);
+
+        setTx({ status: "pending", hash: null, message: "Approving WBTC..." });
         const approveTx = await contracts.wbtc.invoke(
           "approve",
           [contracts.vault.address, cairo.uint256(amount)],
@@ -104,10 +122,15 @@ export function useVault() {
         await waitTx(provider, approveTx.transaction_hash);
         setTx({ status: "pending", hash: approveTx.transaction_hash, message: "Depositing — confirm in wallet..." });
 
-        // On-chain validation: secret + commitment passed so Cairo can verify Poseidon(amount, secret) == commitment
+        // Pass both Stark and BN254 commitments to the vault
         const depositTx = await contracts.vault.invoke(
           "deposit",
-          [cairo.uint256(amount), `0x${secret.toString(16)}`, `0x${commitment.toString(16)}`],
+          [
+            cairo.uint256(amount),
+            `0x${secret.toString(16)}`,
+            `0x${commitment.toString(16)}`,
+            bn254Commitment,
+          ],
         );
         setTx({ status: "pending", hash: depositTx.transaction_hash, message: "Waiting deposit confirmation..." });
         await waitTx(provider, depositTx.transaction_hash);
