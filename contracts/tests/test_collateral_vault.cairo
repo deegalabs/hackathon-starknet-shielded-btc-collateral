@@ -102,7 +102,7 @@ fn test_deposit_stores_commitment() {
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret, commitment);
+    vault.deposit(amount, secret, commitment, 0x1_felt252);
     stop_cheat_caller_address(vault_addr);
 
     assert(vault.get_commitment(alice()) == commitment, 'Commitment not stored');
@@ -124,7 +124,7 @@ fn test_deposit_stores_commitment_only_no_plaintext() {
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret, commitment);
+    vault.deposit(amount, secret, commitment, 0x1_felt252);
     stop_cheat_caller_address(vault_addr);
 
     // Verify commitment is stored (cryptographic binding to amount)
@@ -152,7 +152,7 @@ fn test_deposit_transfers_wbtc_to_vault() {
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret_deposit, commitment);
+    vault.deposit(amount, secret_deposit, commitment, 0x1_felt252);
     stop_cheat_caller_address(vault_addr);
 
     assert(erc20.balance_of(vault_addr) == amount, 'Vault should hold WBTC');
@@ -174,7 +174,7 @@ fn test_deposit_updates_total_locked() {
     assert(vault.get_total_locked() == 0_u256, 'Should start at zero');
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret_deposit, commitment);
+    vault.deposit(amount, secret_deposit, commitment, 0x1_felt252);
     stop_cheat_caller_address(vault_addr);
 
     assert(vault.get_total_locked() == amount, 'Total should equal deposit');
@@ -188,7 +188,7 @@ fn test_deposit_zero_amount_fails() {
     let vault = ICollateralVaultDispatcher { contract_address: vault_addr };
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(0_u256, 0x1234_felt252, 0x5678_felt252);
+    vault.deposit(0_u256, 0x1234_felt252, 0x5678_felt252, 0x1_felt252);
     stop_cheat_caller_address(vault_addr);
 }
 
@@ -202,7 +202,7 @@ fn test_deposit_zero_commitment_fails() {
     fund_and_approve(wbtc, vault_addr, alice(), 1_00000000_u256);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(1_00000000_u256, 0x1234_felt252, 0);
+    vault.deposit(1_00000000_u256, 0x1234_felt252, 0, 0x1_felt252);
     stop_cheat_caller_address(vault_addr);
 }
 
@@ -227,8 +227,8 @@ fn test_deposit_prevents_commitment_overwrite() {
     let commitment2 = make_commitment(amount, 0x222_felt252);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, 0x111_felt252, commitment1); // OK
-    vault.deposit(amount, 0x222_felt252, commitment2); // Must revert: 'Commitment already active'
+    vault.deposit(amount, 0x111_felt252, commitment1, 0x1_felt252); // OK
+    vault.deposit(amount, 0x222_felt252, commitment2, 0x1_felt252); // Must revert: 'Commitment already active'
     stop_cheat_caller_address(vault_addr);
 }
 
@@ -254,9 +254,9 @@ fn test_deposit_allowed_after_full_withdrawal() {
     let commitment2 = make_commitment(amount, 0xccc_felt252);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret1, commitment1);
+    vault.deposit(amount, secret1, commitment1, 0x1_felt252);
     vault.withdraw(amount, secret1, nullifier1); // clears commitment
-    vault.deposit(amount, 0xccc_felt252, commitment2); // must succeed
+    vault.deposit(amount, 0xccc_felt252, commitment2, 0x1_felt252); // must succeed
     stop_cheat_caller_address(vault_addr);
 
     assert(vault.get_commitment(alice()) == commitment2, 'Second deposit not stored');
@@ -287,7 +287,7 @@ fn test_prove_collateral_returns_true_when_commitment_exists() {
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret_prove, commitment);
+    vault.deposit(amount, secret_prove, commitment, 0x1_felt252);
     stop_cheat_caller_address(vault_addr);
 
     // Stub verifier: returns true for any non-zero commitment (no threshold check).
@@ -338,7 +338,7 @@ fn test_prove_collateral_false_after_withdrawal() {
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret, commitment);
+    vault.deposit(amount, secret, commitment, 0x1_felt252);
     assert(vault.prove_collateral(alice(), 1_u256, array![].span()), 'True before withdrawal');
     vault.withdraw(amount, secret, nullifier);
     stop_cheat_caller_address(vault_addr);
@@ -368,7 +368,7 @@ fn test_withdraw_returns_wbtc_to_user() {
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret, commitment);
+    vault.deposit(amount, secret, commitment, 0x1_felt252);
     vault.withdraw(amount, secret, nullifier);
     stop_cheat_caller_address(vault_addr);
 
@@ -392,7 +392,7 @@ fn test_withdraw_marks_nullifier_as_used() {
     assert(!vault.is_nullifier_used(nullifier), 'Nullifier should not be used');
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret, commitment);
+    vault.deposit(amount, secret, commitment, 0x1_felt252);
     vault.withdraw(amount, secret, nullifier);
     stop_cheat_caller_address(vault_addr);
 
@@ -413,7 +413,7 @@ fn test_withdraw_clears_commitment() {
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret, commitment);
+    vault.deposit(amount, secret, commitment, 0x1_felt252);
     assert(vault.get_commitment(alice()) != 0, 'Commitment should exist');
     vault.withdraw(amount, secret, nullifier);
     stop_cheat_caller_address(vault_addr);
@@ -435,7 +435,7 @@ fn test_withdraw_updates_total_locked() {
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret, commitment);
+    vault.deposit(amount, secret, commitment, 0x1_felt252);
     assert(vault.get_total_locked() == amount, 'Total should equal deposit');
     vault.withdraw(amount, secret, nullifier);
     stop_cheat_caller_address(vault_addr);
@@ -467,7 +467,7 @@ fn test_double_spend_prevention() {
     stop_cheat_caller_address(wbtc);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret, commitment);
+    vault.deposit(amount, secret, commitment, 0x1_felt252);
     vault.withdraw(amount, secret, nullifier); // First: OK (nullifier marked used)
     vault.withdraw(amount, secret, nullifier); // Second: must revert 'Nullifier already used'
     stop_cheat_caller_address(vault_addr);
@@ -489,7 +489,7 @@ fn test_withdraw_fails_without_commitment() {
     let secret_legit = 0x111_felt252;
     let commitment = make_commitment(amount, secret_legit);
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret_legit, commitment);
+    vault.deposit(amount, secret_legit, commitment, 0x1_felt252);
     stop_cheat_caller_address(vault_addr);
 
     // Attacker (no deposit) tries to drain using a fabricated commitment+secret
@@ -522,7 +522,7 @@ fn test_withdraw_fails_with_wrong_secret() {
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, correct_secret, commitment);
+    vault.deposit(amount, correct_secret, commitment, 0x1_felt252);
 
     // Attempt withdrawal with wrong secret — preimage check fails
     let bad_nullifier = make_nullifier(commitment, wrong_secret);
@@ -546,7 +546,7 @@ fn test_withdraw_fails_with_wrong_amount() {
     fund_and_approve(wbtc, vault_addr, alice(), deposit_amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(deposit_amount, correct_secret, commitment);
+    vault.deposit(deposit_amount, correct_secret, commitment, 0x1_felt252);
 
     // Alice tries to withdraw MORE — Poseidon(10BTC, secret) != commitment → 'Invalid preimage'
     let inflated_amount = 10_00000000_u256;
@@ -571,7 +571,7 @@ fn test_withdraw_fails_with_forged_nullifier() {
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret, commitment);
+    vault.deposit(amount, secret, commitment, 0x1_felt252);
     vault.withdraw(amount, secret, forged_nullifier); // 'Invalid nullifier'
     stop_cheat_caller_address(vault_addr);
 }
@@ -599,7 +599,7 @@ fn test_privacy_model_commitment_only() {
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret, commitment);
+    vault.deposit(amount, secret, commitment, 0x1_felt252);
     stop_cheat_caller_address(vault_addr);
 
     // 1. Commitment is stored on-chain
@@ -680,11 +680,11 @@ fn test_multiple_users_independent_commitments() {
     fund_and_approve(wbtc, vault_addr, bob(), bob_amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(alice_amount, alice_secret, alice_commitment);
+    vault.deposit(alice_amount, alice_secret, alice_commitment, 0x1_felt252);
     stop_cheat_caller_address(vault_addr);
 
     start_cheat_caller_address(vault_addr, bob());
-    vault.deposit(bob_amount, bob_secret, bob_commitment);
+    vault.deposit(bob_amount, bob_secret, bob_commitment, 0x1_felt252);
     stop_cheat_caller_address(vault_addr);
 
     // Commitments are independent and different
@@ -776,7 +776,7 @@ fn test_deposit_fails_when_paused() {
     let commitment = make_commitment(amount, secret_paused);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret_paused, commitment); // Must revert: 'Vault is paused'
+    vault.deposit(amount, secret_paused, commitment, 0x1_felt252); // Must revert: 'Vault is paused'
     stop_cheat_caller_address(vault_addr);
 }
 
@@ -795,7 +795,7 @@ fn test_withdraw_fails_when_paused() {
 
     fund_and_approve(wbtc, vault_addr, alice(), amount);
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret, commitment);
+    vault.deposit(amount, secret, commitment, 0x1_felt252);
     stop_cheat_caller_address(vault_addr);
 
     start_cheat_caller_address(vault_addr, admin());
@@ -819,7 +819,7 @@ fn test_prove_collateral_works_when_paused() {
     let commitment = make_commitment(amount, secret_cafe);
     fund_and_approve(wbtc, vault_addr, alice(), amount);
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret_cafe, commitment);
+    vault.deposit(amount, secret_cafe, commitment, 0x1_felt252);
     stop_cheat_caller_address(vault_addr);
 
     // Pause vault — but prove_collateral must still work (DeFi integrators need it)
@@ -889,7 +889,7 @@ fn test_deposit_rejects_wrong_commitment() {
 
     start_cheat_caller_address(vault_addr, alice());
     // Pass wrong_secret but commitment from correct_secret → on-chain preimage mismatch
-    vault.deposit(amount, wrong_secret, commitment); // Must revert: 'Invalid commitment'
+    vault.deposit(amount, wrong_secret, commitment, 0x1_felt252); // Must revert: 'Invalid commitment'
     stop_cheat_caller_address(vault_addr);
 }
 
@@ -924,7 +924,7 @@ fn test_deposit_with_valid_on_chain_commitment() {
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret, commitment); // Must succeed
+    vault.deposit(amount, secret, commitment, 0x1_felt252); // Must succeed
     stop_cheat_caller_address(vault_addr);
 
     let stored = vault.get_commitment(alice());
@@ -954,7 +954,7 @@ fn test_cross_user_withdrawal_isolation() {
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, alice_secret, alice_commitment);
+    vault.deposit(amount, alice_secret, alice_commitment, 0x1_felt252);
     stop_cheat_caller_address(vault_addr);
 
     // Bob knows Alice's secret+nullifier but has NO deposit of his own
@@ -978,7 +978,7 @@ fn test_withdraw_rejects_zero_nullifier() {
 
     fund_and_approve(wbtc, vault_addr, alice(), amount);
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret, commitment);
+    vault.deposit(amount, secret, commitment, 0x1_felt252);
     vault.withdraw(amount, secret, 0); // zero nullifier must be rejected
     stop_cheat_caller_address(vault_addr);
 }
@@ -1005,7 +1005,7 @@ fn test_deposit_fails_with_insufficient_balance() {
     stop_cheat_caller_address(wbtc);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret, commitment); // Must panic: insufficient balance
+    vault.deposit(amount, secret, commitment, 0x1_felt252); // Must panic: insufficient balance
     stop_cheat_caller_address(vault_addr);
 }
 
@@ -1023,7 +1023,7 @@ fn test_prove_collateral_is_permissionless() {
 
     fund_and_approve(wbtc, vault_addr, alice(), amount);
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret, commitment);
+    vault.deposit(amount, secret, commitment, 0x1_felt252);
     stop_cheat_caller_address(vault_addr);
 
     // Bob (a lending protocol) can check Alice's collateral without special permissions
@@ -1050,7 +1050,7 @@ fn test_deposit_and_withdraw_one_satoshi() {
     fund_and_approve(wbtc, vault_addr, alice(), amount);
 
     start_cheat_caller_address(vault_addr, alice());
-    vault.deposit(amount, secret, commitment);
+    vault.deposit(amount, secret, commitment, 0x1_felt252);
     vault.withdraw(amount, secret, nullifier);
     stop_cheat_caller_address(vault_addr);
 
