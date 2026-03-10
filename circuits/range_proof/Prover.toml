@@ -1,0 +1,10 @@
+# Prover inputs for range_proof circuit
+# Private inputs (not published in proof)
+amount = "100000000"  # 1.0 BTC in satoshis
+secret = "0x1234567890abcdef1234567890abcdef"
+
+# Public inputs (included in proof and verified on-chain)
+# commitment = poseidon2_permutation([amount, secret, 0, 0], 4)[0]
+# Computed via: nargo execute
+commitment = "0x02373b1303634039833d9dfd8d12886e9bf23179132a352ab17bea9f2f80ffbb"
+threshold = "50000000"  # 0.5 BTC -- amount (1.0 BTC) must exceed this

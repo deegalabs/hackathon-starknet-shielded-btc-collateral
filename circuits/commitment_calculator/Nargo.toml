@@ -1,0 +1,8 @@
+[package]
+name = "commitment_calculator"
+type = "bin"
+authors = ["ShieldedBTC Team"]
+description = "Helper circuit: computes BN254 Poseidon2 commitment from (amount, secret)"
+compiler_version = ">=0.19.0"
+
+[dependencies]

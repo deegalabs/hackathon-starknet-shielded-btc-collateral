@@ -1,0 +1,8 @@
+[package]
+name = "range_proof"
+type = "bin"
+authors = ["ShieldedBTC Team"]
+description = "ZK range proof for BTC collateral: proves amount > threshold without revealing amount"
+compiler_version = ">=0.19.0"
+
+[dependencies]

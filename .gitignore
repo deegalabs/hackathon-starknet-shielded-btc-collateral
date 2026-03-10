@@ -2,6 +2,10 @@
 contracts/target/
 target/
 
+# Noir / Barretenberg build artifacts
+circuits/*/target/
+circuits/*/range_proof_verifier/
+
 # Starknet Foundry cache
 contracts/.snfoundry_cache/
 
