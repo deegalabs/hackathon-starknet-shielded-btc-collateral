@@ -88,8 +88,8 @@ export default function Dashboard() {
           <div className="space-y-3">
             {[
               { label: "Connect wallet", done: true, to: null },
-              { label: "Deposit BTC into the Vault", done: false, to: "/vault" },
-              { label: "Borrow or enable gas sponsorship", done: false, to: "/lending" },
+              { label: "Deposit BTC into the Vault", done: false, to: "/app/vault" },
+              { label: "Borrow or enable gas sponsorship", done: false, to: "/app/lending" },
             ].map(({ label, done, to }, i) => (
               <div key={i} className="flex items-center gap-3">
                 {done ? (
@@ -124,29 +124,29 @@ export default function Dashboard() {
               Your Shield
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[
-                {
-                  to: "/vault",
-                  label: hasDeposit ? "Manage Vault" : "Deposit BTC",
-                  desc: hasDeposit ? "View or withdraw" : "Lock BTC privately",
-                  color: "btc",
-                  icon: Bitcoin,
-                },
-                {
-                  to: "/paymaster",
-                  label: "Paymaster",
-                  desc: "Gasless transactions",
-                  color: "privacy",
-                  icon: Zap,
-                },
-                {
-                  to: "/session-keys",
-                  label: "Session Keys",
-                  desc: "Delegate DApp access",
-                  color: "stark",
-                  icon: ShieldCheck,
-                },
-              ].map(({ to, label, desc, color, icon: Icon }) => (
+            {[
+              {
+                to: "/app/vault",
+                label: hasDeposit ? "Manage Vault" : "Deposit BTC",
+                desc: hasDeposit ? "View or withdraw" : "Lock BTC privately",
+                color: "btc",
+                icon: Bitcoin,
+              },
+              {
+                to: "/app/paymaster",
+                label: "Paymaster",
+                desc: "Gasless transactions",
+                color: "privacy",
+                icon: Zap,
+              },
+              {
+                to: "/app/session-keys",
+                label: "Session Keys",
+                desc: "Delegate DApp access",
+                color: "stark",
+                icon: ShieldCheck,
+              },
+            ].map(({ to, label, desc, color, icon: Icon }) => (
                 <Link
                   key={to}
                   to={to}
@@ -173,7 +173,7 @@ export default function Dashboard() {
               Ecosystem — DeFi Integrations
             </h2>
             <Link
-              to="/lending"
+              to="/app/lending"
               className="flex items-center justify-between p-4 rounded-xl border border-btc/20 bg-btc/5 hover:border-btc/40 hover:bg-btc/8 transition-all group"
             >
               <div className="flex items-center gap-3">

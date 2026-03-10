@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { WalletProvider } from "@/context/WalletContext";
 import { Layout } from "@/components/Layout";
+import LandingPage from "@/pages/LandingPage";
 import Dashboard from "@/pages/Dashboard";
 import AccountSetup from "@/pages/AccountSetup";
 import Vault from "@/pages/Vault";
@@ -13,7 +14,11 @@ export default function App() {
     <WalletProvider>
       <BrowserRouter>
         <Routes>
-          <Route element={<Layout />}>
+          {/* Landing page — outside the app shell */}
+          <Route path="/" element={<LandingPage />} />
+
+          {/* App shell — all dApp routes under /app */}
+          <Route path="/app" element={<Layout />}>
             <Route index element={<Dashboard />} />
             <Route path="account" element={<AccountSetup />} />
             <Route path="vault" element={<Vault />} />

@@ -14,18 +14,18 @@ import { useWallet } from "@/context/WalletContext";
 import { NETWORK, NETWORK_LABELS } from "@/lib/config";
 
 const CORE_NAV = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard", end: true },
-  { to: "/vault", icon: Vault, label: "Vault" },
-  { to: "/paymaster", icon: Zap, label: "Paymaster" },
+  { to: "/app", icon: LayoutDashboard, label: "Dashboard", end: true },
+  { to: "/app/vault", icon: Vault, label: "Vault" },
+  { to: "/app/paymaster", icon: Zap, label: "Paymaster" },
 ];
 
 const SETTINGS_NAV = [
-  { to: "/account", icon: UserCheck, label: "My Account", badge: undefined },
-  { to: "/session-keys", icon: KeyRound, label: "Session Keys", badge: "SNIP-9" },
+  { to: "/app/account", icon: UserCheck, label: "My Account", badge: undefined },
+  { to: "/app/session-keys", icon: KeyRound, label: "Session Keys", badge: "SNIP-9" },
 ];
 
 const ECOSYSTEM_NAV = [
-  { to: "/lending", icon: TrendingUp, label: "DeFi Integrations" },
+  { to: "/app/lending", icon: TrendingUp, label: "DeFi Integrations" },
 ];
 
 function NavItem({
