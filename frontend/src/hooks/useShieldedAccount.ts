@@ -74,6 +74,16 @@ export function useShieldedAccount() {
       setError(null);
 
       try {
+        // ── 0. Verify class hash is declared on this network ────────────────
+        try {
+          await provider.getClassByHash(SHIELDED_ACCOUNT_CLASS_HASH);
+        } catch {
+          throw new Error(
+            `Class hash ${SHIELDED_ACCOUNT_CLASS_HASH} não está declarado na rede atual. ` +
+            `Verifique se o devnet local está rodando e se o contrato foi declarado com o script de deploy.`,
+          );
+        }
+
         // ── 1. Generate Stark key pair ──────────────────────────────────────
         const privateKey = stark.randomAddress();
         const publicKey = ec.starkCurve.getStarkKey(privateKey);

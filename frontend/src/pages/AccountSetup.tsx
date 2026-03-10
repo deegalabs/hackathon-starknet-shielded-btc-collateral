@@ -23,11 +23,13 @@ import {
   ExternalLink,
   RefreshCw,
   Info,
+  WifiOff,
+  Droplets,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useWallet } from "@/context/WalletContext";
 import { useShieldedAccount } from "@/hooks/useShieldedAccount";
-import { SHIELDED_ACCOUNT_CLASS_HASH, CONTRACTS, shortAddr } from "@/lib/config";
+import { SHIELDED_ACCOUNT_CLASS_HASH, CONTRACTS, NETWORK, RPC_URL, shortAddr } from "@/lib/config";
 
 const FEATURES = [
   {
@@ -62,7 +64,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function AccountSetup() {
-  const { account, address, provider, switchToShieldedAccount } = useWallet();
+  const { account, address, provider, connectMethod, switchToShieldedAccount } = useWallet();
   const { status, error, txHash, info, deploy, clear } = useShieldedAccount();
   const [showPrivKey, setShowPrivKey] = useState(false);
 
@@ -72,8 +74,42 @@ export default function AccountSetup() {
     status === "deploying" ||
     status === "confirming";
 
+  const [faucetStatus, setFaucetStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+
+  async function handleFaucet() {
+    if (!address || NETWORK !== "devnet") return;
+    setFaucetStatus("loading");
+    try {
+      // Mint 0.5 ETH + 0.5 STRK via devnet faucet
+      await Promise.all([
+        fetch(RPC_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", method: "devnet_mint", params: { address, amount: 500000000000000000, unit: "WEI" }, id: 1 }),
+        }),
+        fetch(RPC_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", method: "devnet_mint", params: { address, amount: 500000000000000000, unit: "FRI" }, id: 2 }),
+        }),
+      ]);
+      setFaucetStatus("done");
+    } catch {
+      setFaucetStatus("error");
+    }
+  }
+
+  // Web wallet (email/Argent Web) uses Argent's own RPC — it cannot reach
+  // localhost:5050. The ShieldedAccount class is only declared on the local
+  // devnet, so deploying via web wallet will always fail.
+  const isWebWalletOnDevnet =
+    connectMethod === "email" && NETWORK === "devnet";
+
+  const canDeploy =
+    !!account && !isClassHashMissing && !isDeploying && !isWebWalletOnDevnet;
+
   async function handleDeploy() {
-    if (!account) return;
+    if (!account || isWebWalletOnDevnet) return;
     await deploy(account, provider, (shieldedAcc, addr) => {
       switchToShieldedAccount(shieldedAcc, addr);
     });
@@ -170,6 +206,31 @@ export default function AccountSetup() {
         ))}
       </div>
 
+      {/* Web wallet + devnet incompatibility warning */}
+      {isWebWalletOnDevnet && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/30">
+          <WifiOff size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="text-red-300 font-medium">
+              Argent Web Wallet não pode acessar o devnet local
+            </p>
+            <p className="text-muted mt-1">
+              A carteira de email roteia transações pela infraestrutura da Argent
+              (Sepolia/mainnet), mas o contrato{" "}
+              <code className="text-red-300">ShieldedAccount</code> só está
+              declarado em <code className="text-red-300">localhost:5050</code>.
+            </p>
+            <p className="text-muted mt-2">
+              Para o demo no devnet local, use a extensão{" "}
+              <span className="text-white font-medium">Argent X</span> ou{" "}
+              <span className="text-white font-medium">Braavos</span> configurada
+              com a rede{" "}
+              <code className="text-white">http://localhost:5050</code>.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Config warning */}
       {isClassHashMissing && (
         <div className="flex items-start gap-3 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
@@ -251,14 +312,51 @@ export default function AccountSetup() {
         </div>
       )}
 
+      {/* Devnet faucet — only shown on devnet when wallet is connected */}
+      {account && NETWORK === "devnet" && (
+        <div className="flex items-center justify-between p-4 rounded-xl bg-surface border border-border">
+          <div className="flex items-center gap-3">
+            <Droplets size={16} className="text-blue-400 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-white">Devnet Faucet</p>
+              <p className="text-xs text-muted mt-0.5">
+                Mint 0.5 ETH + 0.5 STRK para pagar o gas do deploy
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleFaucet}
+            disabled={faucetStatus === "loading"}
+            className={clsx(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex-shrink-0",
+              faucetStatus === "done"
+                ? "bg-privacy/20 text-privacy border border-privacy/30"
+                : faucetStatus === "error"
+                ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                : "bg-blue-500/20 text-blue-300 border border-blue-500/30 hover:bg-blue-500/30",
+            )}
+          >
+            {faucetStatus === "loading" ? (
+              <><Loader2 size={11} className="animate-spin" /> Mintando…</>
+            ) : faucetStatus === "done" ? (
+              <><CheckCircle2 size={11} /> Funded!</>
+            ) : faucetStatus === "error" ? (
+              "Erro"
+            ) : (
+              <><Droplets size={11} /> Fund Account</>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* CTA */}
       <div className="flex items-center gap-3">
         <button
           onClick={handleDeploy}
-          disabled={!account || isClassHashMissing || isDeploying}
+          disabled={!canDeploy}
           className={clsx(
             "flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-sm transition-all",
-            account && !isClassHashMissing && !isDeploying
+            canDeploy
               ? "bg-stark hover:bg-stark/90 text-white"
               : "bg-surface text-muted cursor-not-allowed border border-border",
           )}

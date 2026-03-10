@@ -101,11 +101,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const wallet = await connect({ modalMode: "alwaysAsk" }) as any;
-      if (!wallet?.account) return;
-      setAccount(wallet.account as AccountInterface);
-      setAddress((wallet.selectedAddress ?? wallet.account.address) as string);
+      if (!wallet) return;
+
+      // get-starknet v4: wallet may not be enabled yet — call enable() to
+      // trigger the permission popup and populate wallet.account
+      if (!wallet.account || !wallet.isConnected) {
+        await wallet.enable({ starknetVersion: "v5" }).catch(() => wallet.enable());
+      }
+
+      const acc = wallet.account;
+      const addr = wallet.selectedAddress ?? acc?.address;
+      if (!acc || !addr) return;
+
+      setAccount(acc as AccountInterface);
+      setAddress(addr as string);
       setWalletName((wallet.name ?? "Wallet") as string);
       setConnectMethod("extension");
+      localStorage.setItem("gsw-last-wallet", wallet.id ?? wallet.name ?? "extension");
     } catch (err) {
       console.error("Extension wallet connect failed:", err);
     } finally {
@@ -165,6 +177,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch {
       // starknetkit may manage its own disconnect
     }
+    localStorage.removeItem("gsw-last-wallet");
     setAccount(null);
     setAddress(null);
     setWalletName(null);
@@ -172,20 +185,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setContracts(buildContracts(provider));
   }, []);
 
-  // Auto-reconnect extension wallet on page load
+  // Auto-reconnect only if user explicitly connected before (stored in localStorage)
   useEffect(() => {
+    const lastWallet = localStorage.getItem("gsw-last-wallet");
+    if (!lastWallet) return;
+
     (async () => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const wallet = await connect({ modalMode: "neverAsk" }) as any;
-        if (wallet?.account) {
-          setAccount(wallet.account as AccountInterface);
-          setAddress((wallet.selectedAddress ?? wallet.account.address) as string);
+        if (!wallet) return;
+        if (!wallet.account || !wallet.isConnected) {
+          await wallet.enable({ starknetVersion: "v5" }).catch(() => wallet.enable());
+        }
+        const acc = wallet.account;
+        const addr = wallet.selectedAddress ?? acc?.address;
+        if (acc && addr) {
+          setAccount(acc as AccountInterface);
+          setAddress(addr as string);
           setWalletName((wallet.name ?? "Wallet") as string);
           setConnectMethod("extension");
         }
       } catch {
-        // No wallet previously connected
+        // Wallet no longer available
       }
     })();
   }, []);
