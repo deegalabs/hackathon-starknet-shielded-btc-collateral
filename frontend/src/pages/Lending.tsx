@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { TrendingUp, TrendingDown, ShieldCheck, RefreshCw, Info, Layers } from "lucide-react";
+import { TrendingUp, TrendingDown, ShieldCheck, Info, Layers } from "lucide-react";
 import { PageShell } from "@/components/PageShell";
+import { RefreshButton } from "@/components/RefreshButton";
 import { clsx } from "clsx";
 import { useLending } from "@/hooks/useLending";
 import { useVault } from "@/hooks/useVault";
@@ -53,14 +54,7 @@ export default function Lending() {
     <PageShell
       title="DeFi Integrations"
       subtitle={`Borrow against private BTC collateral — ${state.ltvRatio}% LTV`}
-      action={
-        <button
-          onClick={refresh}
-          className="p-2 rounded-lg text-muted hover:text-white hover:bg-surface-2 border border-border transition-colors"
-        >
-          <RefreshCw size={15} />
-        </button>
-      }
+      action={<RefreshButton onClick={refresh} loading={state.isLoading} />}
     >
 
       {/* Integration banner */}
@@ -108,6 +102,7 @@ export default function Lending() {
           }
           icon={TrendingUp}
           accent="stark"
+          loading={state.isLoading}
         />
         <StatCard
           title="Active Debt"
@@ -115,6 +110,7 @@ export default function Lending() {
           subtitle={hasDebt ? `${utilizationPct}% utilized` : "No loan"}
           icon={TrendingDown}
           accent={hasDebt ? "btc" : "default"}
+          loading={state.isLoading}
         />
       </div>
 

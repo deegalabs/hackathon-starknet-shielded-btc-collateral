@@ -29,6 +29,7 @@ export default function Dashboard() {
           subtitle="Protocol-wide vault"
           icon={Bitcoin}
           accent="btc"
+          loading={vault.isLoading}
         />
         <StatCard
           title="Your Collateral"
@@ -36,6 +37,7 @@ export default function Dashboard() {
           subtitle={hasDeposit ? "Commitment active" : "No deposit yet"}
           icon={Lock}
           accent={hasDeposit ? "privacy" : "default"}
+          loading={vault.isLoading}
         />
         <StatCard
           title="Gas Sponsorship"
@@ -47,6 +49,7 @@ export default function Dashboard() {
           }
           icon={Zap}
           accent={paymaster.isEligible ? "privacy" : "default"}
+          loading={paymaster.isLoading}
         />
       </div>
 

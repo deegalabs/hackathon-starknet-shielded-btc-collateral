@@ -7,6 +7,7 @@ interface StatCardProps {
   subtitle?: string;
   icon: LucideIcon;
   accent?: "btc" | "stark" | "privacy" | "default";
+  loading?: boolean;
   className?: string;
 }
 
@@ -30,6 +31,7 @@ export function StatCard({
   subtitle,
   icon: Icon,
   accent = "default",
+  loading = false,
   className,
 }: StatCardProps) {
   return (
@@ -42,11 +44,20 @@ export function StatCard({
     >
       <div className="flex items-start justify-between mb-2">
         <p className="text-xs font-medium text-muted uppercase tracking-wide">{title}</p>
-        <Icon size={16} className={clsx(iconStyles[accent], "flex-shrink-0")} />
+        <Icon size={16} className={clsx(iconStyles[accent], "flex-shrink-0", loading && "opacity-40")} />
       </div>
       <div>
-        <p className="text-xl font-bold text-white tracking-tight leading-tight truncate">{value}</p>
-        {subtitle && <p className="text-xs text-muted mt-1 leading-snug">{subtitle}</p>}
+        {loading ? (
+          <div className="space-y-2 animate-pulse">
+            <div className="h-5 w-2/3 rounded-md bg-white/10" />
+            <div className="h-3 w-1/2 rounded-md bg-white/5" />
+          </div>
+        ) : (
+          <>
+            <p className="text-xl font-bold text-white tracking-tight leading-tight truncate">{value}</p>
+            {subtitle && <p className="text-xs text-muted mt-1 leading-snug">{subtitle}</p>}
+          </>
+        )}
       </div>
     </div>
   );

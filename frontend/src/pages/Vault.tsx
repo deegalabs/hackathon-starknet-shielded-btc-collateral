@@ -5,13 +5,13 @@ import {
   Unlock,
   Eye,
   EyeOff,
-  RefreshCw,
   ChevronDown,
   ChevronUp,
   ShieldCheck,
   AlertTriangle,
 } from "lucide-react";
 import { PageShell } from "@/components/PageShell";
+import { RefreshButton } from "@/components/RefreshButton";
 import { clsx } from "clsx";
 import { useVault } from "@/hooks/useVault";
 import { useWallet } from "@/context/WalletContext";
@@ -115,14 +115,7 @@ export default function Vault() {
     <PageShell
       title="Vault"
       subtitle="Deposit & withdraw with Poseidon commitment privacy"
-      action={
-        <button
-          onClick={refresh}
-          className="p-2 rounded-lg text-muted hover:text-white hover:bg-surface-2 border border-border transition-colors"
-        >
-          <RefreshCw size={15} />
-        </button>
-      }
+      action={<RefreshButton onClick={refresh} loading={state.isLoading} />}
     >
 
       {/* Stats row */}
@@ -133,6 +126,7 @@ export default function Vault() {
           subtitle={state.wbtcBalance > 0n ? "Available to deposit" : "No WBTC in wallet"}
           icon={Bitcoin}
           accent={state.wbtcBalance > 0n ? "btc" : "default"}
+          loading={state.isLoading}
         />
         <StatCard
           title="Your Commitment"
@@ -140,6 +134,7 @@ export default function Vault() {
           subtitle={hasDeposit ? "Private deposit exists" : "No deposit"}
           icon={ShieldCheck}
           accent={hasDeposit ? "privacy" : "default"}
+          loading={state.isLoading}
         />
         <StatCard
           title="Total Locked"
@@ -147,6 +142,7 @@ export default function Vault() {
           subtitle="Protocol-wide"
           icon={Lock}
           accent="privacy"
+          loading={state.isLoading}
         />
       </div>
 

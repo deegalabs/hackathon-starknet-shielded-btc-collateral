@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Zap, CheckCircle, XCircle, RefreshCw, Users } from "lucide-react";
+import { Zap, CheckCircle, XCircle, Users } from "lucide-react";
 import { PageShell } from "@/components/PageShell";
+import { RefreshButton } from "@/components/RefreshButton";
 import { usePaymaster } from "@/hooks/usePaymaster";
 import { useVault } from "@/hooks/useVault";
 import { useWallet } from "@/context/WalletContext";
@@ -51,14 +52,7 @@ export default function Paymaster() {
     <PageShell
       title="Paymaster"
       subtitle="Gasless transactions for qualifying users"
-      action={
-        <button
-          onClick={refresh}
-          className="p-2 rounded-lg text-muted hover:text-white hover:bg-surface-2 border border-border transition-colors"
-        >
-          <RefreshCw size={15} />
-        </button>
-      }
+      action={<RefreshButton onClick={refresh} loading={state.isLoading} />}
     >
 
       {/* Stats */}
@@ -69,6 +63,7 @@ export default function Paymaster() {
           subtitle="STRK units remaining"
           icon={Zap}
           accent="stark"
+          loading={state.isLoading}
         />
         <StatCard
           title="Sponsorship Threshold"
@@ -76,6 +71,7 @@ export default function Paymaster() {
           subtitle="Minimum collateral required"
           icon={Users}
           accent="privacy"
+          loading={state.isLoading}
         />
       </div>
 
