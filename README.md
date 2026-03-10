@@ -423,8 +423,16 @@ Built with ❤️ by [DeegaLabs](https://deegalabs.com)
 
 | Member | Role |
 |--------|------|
-| **Dan** | Blockchain Architect, Cairo Developer (2nd place Cronos Hackathon) |
-| **Dayane** | Full-stack Developer, UX/UI, Web3 Integrations |
+| **Daniel Gorgonha** | Blockchain Architect, Cairo Developer (2nd place Cronos Hackathon) |
+| **Dayane Gorgonha** | Full-stack Developer, UX/UI, Web3 Integrations |
+
+### Daniel Gorgonha  
+**Blockchain Engineer | Senior Software Engineer**  
+Over 9 years of software development experience, specialized in Blockchain and Web3. Develops smart contracts, decentralized applications, and tokenization systems using Node.js, Python, Rust, and Solidity.
+
+### Dayane Gorgonha  
+**Product Architecture & Philosophical Logic**  
+Works on digital product architecture in the pre-development stage, structuring solutions before they become code. Uses philosophical logic as an analytical method to create resilient architectures.
 
 ---
 
