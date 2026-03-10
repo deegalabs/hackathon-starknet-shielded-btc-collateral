@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { TrendingUp, TrendingDown, ShieldCheck, Info, Layers, Lock } from "lucide-react";
+import { TrendingUp, TrendingDown, ShieldCheck, Info, Layers, Lock, Eye, EyeOff, Zap } from "lucide-react";
 import { PageShell } from "@/components/PageShell";
 import { RefreshButton } from "@/components/RefreshButton";
 import { clsx } from "clsx";
@@ -9,6 +9,7 @@ import { useWallet } from "@/context/WalletContext";
 import { StatCard } from "@/components/StatCard";
 import { TxToast } from "@/components/TxToast";
 import { btcToSats, satsToBtc } from "@/lib/config";
+import { isZKSupported } from "@/lib/zk";
 
 export default function Lending() {
   const { isConnected } = useWallet();
@@ -18,28 +19,48 @@ export default function Lending() {
   const [borrowAmount, setBorrowAmount] = useState("");
   const [repayAmount, setRepayAmount] = useState("");
 
+  // ZK proof inputs — private inputs needed to generate the range proof
+  const [depositedAmount, setDepositedAmount] = useState("");
+  const [depositSecret, setDepositSecret] = useState("");
+  const [showSecret, setShowSecret] = useState(false);
+
   // [H-07 Fix] Deposit detected via commitment (amount is private — not stored on-chain)
   const hasCollateral = vault.commitment !== "0x0" && vault.commitment !== "0x" && BigInt(vault.commitment || "0") !== 0n;
+  const hasBN254Commitment = vault.bn254Commitment !== "0x0" && vault.bn254Commitment !== "0x" && BigInt(vault.bn254Commitment || "0") !== 0n;
   const hasDebt = state.debt > 0n;
+  const zkAvailable = isZKSupported();
 
   // Required collateral (ceiling division at 70% LTV)
-  // [H-07 Fix] We can't compare to committedAmount (private) — the vault contract
-  // uses prove_collateral to verify on-chain. The UI shows required threshold only.
   const borrowSats = btcToSats(borrowAmount);
   const requiredCollateral =
     borrowSats > 0n ? (borrowSats * 100n + 69n) / 70n : 0n;
-  // With stub verifier: any depositor passes. Frontend shows threshold for informational purposes.
   const collateralCoversLoan = borrowSats > 0n && hasCollateral;
+
+  // ZK proof: user must provide actual deposited amount (private) + secret
+  const depositedSats = btcToSats(depositedAmount);
+  const zkProofReady =
+    hasBN254Commitment &&
+    depositedSats > 0n &&
+    depositSecret.length > 0 &&
+    depositedSats > requiredCollateral;
 
   const utilizationPct =
     state.borrowLimit > 0n
       ? Math.min(100, Number((state.debt * 100n) / state.borrowLimit))
       : 0;
 
+  const isGeneratingProof = tx.status === "pending" && tx.message?.includes("ZK proof");
+
   const handleBorrow = async () => {
     const sats = btcToSats(borrowAmount);
     if (sats <= 0n) return;
-    await borrow(sats);
+
+    // Pass ZK proof params if available
+    if (zkProofReady && depositSecret && hasBN254Commitment) {
+      await borrow(sats, depositSecret, vault.bn254Commitment, requiredCollateral);
+    } else {
+      await borrow(sats);
+    }
     setBorrowAmount("");
   };
 
@@ -199,6 +220,85 @@ export default function Lending() {
               />
             </div>
 
+            {/* ZK Proof section — optional but enables privacy-preserving threshold proof */}
+            {hasBN254Commitment && zkAvailable && (
+              <div className="rounded-xl border border-stark/20 bg-stark/5 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Zap size={13} className="text-stark" />
+                  <span className="text-xs font-semibold text-stark uppercase tracking-wider">
+                    ZK Range Proof
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-stark/20 text-stark font-medium ml-auto">
+                    Optional
+                  </span>
+                </div>
+                <p className="text-xs text-muted leading-relaxed">
+                  Provide your deposit details to generate a{" "}
+                  <span className="text-white">zero-knowledge proof</span> that
+                  your collateral exceeds the threshold — without revealing the amount.
+                </p>
+
+                <div>
+                  <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-2">
+                    Your deposited amount (BTC) — private
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="0.00000000 — the exact amount you deposited"
+                    value={depositedAmount}
+                    onChange={(e) => setDepositedAmount(e.target.value)}
+                    className="w-full bg-surface-2 border border-border rounded-lg px-4 py-3 text-white placeholder-muted font-mono text-sm focus:outline-none focus:border-stark transition-colors"
+                  />
+                  <p className="text-xs text-muted mt-1">
+                    Never sent on-chain — used locally to generate the ZK proof.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-2">
+                    Deposit secret — private
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showSecret ? "text" : "password"}
+                      placeholder="0x... (the secret you used when depositing)"
+                      value={depositSecret}
+                      onChange={(e) => setDepositSecret(e.target.value)}
+                      className="w-full bg-surface-2 border border-border rounded-lg px-4 py-3 text-white placeholder-muted font-mono text-xs focus:outline-none focus:border-stark transition-colors pr-10"
+                    />
+                    <button
+                      onClick={() => setShowSecret(!showSecret)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-white"
+                    >
+                      {showSecret ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
+
+                {depositedAmount && depositSecret && (
+                  <div className={clsx(
+                    "rounded-lg border p-3 font-mono text-xs space-y-1.5",
+                    zkProofReady ? "border-stark/30 bg-stark/5" : "border-red-500/30 bg-red-500/5"
+                  )}>
+                    <div className="flex justify-between">
+                      <span className="text-muted">Your collateral</span>
+                      <span className="text-white">{depositedSats.toLocaleString()} sats</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted">Required threshold</span>
+                      <span className="text-white">{requiredCollateral.toLocaleString()} sats</span>
+                    </div>
+                    <div className="flex justify-between border-t border-border pt-1.5">
+                      <span className="text-muted">ZK proof status</span>
+                      <span className={zkProofReady ? "text-stark" : "text-red-400"}>
+                        {zkProofReady ? "Ready to generate ✓" : "Collateral < threshold ✗"}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {borrowSats > 0n && (
               <div className="rounded-lg border border-border bg-surface-2 p-3 font-mono text-xs space-y-2">
                 <div className="flex justify-between">
@@ -219,6 +319,12 @@ export default function Lending() {
                     {hasCollateral ? "Active ✓" : "None ✗"}
                   </span>
                 </div>
+                {hasBN254Commitment && (
+                  <div className="flex justify-between">
+                    <span className="text-muted">ZK commitment (BN254)</span>
+                    <span className="text-stark">Available ✓</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -230,11 +336,28 @@ export default function Lending() {
                 tx.status === "pending"
               }
               onClick={handleBorrow}
-              className="w-full py-3 rounded-lg font-medium text-sm transition-all bg-stark text-white hover:bg-stark-dim disabled:opacity-40 disabled:cursor-not-allowed"
+              className={clsx(
+                "w-full py-3 rounded-lg font-medium text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed",
+                zkProofReady && borrowSats > 0n
+                  ? "bg-stark text-white hover:bg-stark-dim"
+                  : "bg-stark text-white hover:bg-stark-dim"
+              )}
             >
-              {!collateralCoversLoan && borrowSats > 0n
-                ? "Insufficient collateral"
-                : "Borrow"}
+              {isGeneratingProof ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" />
+                  Generating ZK proof...
+                </span>
+              ) : !collateralCoversLoan && borrowSats > 0n ? (
+                "Insufficient collateral"
+              ) : zkProofReady && borrowSats > 0n ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Zap size={14} />
+                  Borrow with ZK Proof
+                </span>
+              ) : (
+                "Borrow"
+              )}
             </button>
           </>
         )}
