@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { CheckCircle, XCircle, Loader2, X } from "lucide-react";
 import { clsx } from "clsx";
 import type { TxState } from "@/hooks/useVault";
@@ -8,6 +9,12 @@ interface TxToastProps {
 }
 
 export function TxToast({ tx, onClose }: TxToastProps) {
+  useEffect(() => {
+    if (tx.status !== "success") return;
+    const timer = setTimeout(onClose, 5000);
+    return () => clearTimeout(timer);
+  }, [tx.status, onClose]);
+
   if (tx.status === "idle") return null;
 
   return (

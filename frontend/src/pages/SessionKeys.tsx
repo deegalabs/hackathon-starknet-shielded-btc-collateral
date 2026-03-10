@@ -9,11 +9,13 @@ import {
   RefreshCw,
   Copy,
   CheckCircle,
+  Wallet,
 } from "lucide-react";
 import { PageShell } from "@/components/PageShell";
 import { clsx } from "clsx";
 import { useSessionKeys, type SessionKeyInfo } from "@/hooks/useSessionKeys";
 import { useWallet } from "@/context/WalletContext";
+import { WalletButton } from "@/components/WalletButton";
 import { TxToast } from "@/components/TxToast";
 import { shortAddr, satsToBtc } from "@/lib/config";
 import { CONTRACTS } from "@/lib/config";
@@ -100,6 +102,23 @@ export default function SessionKeys() {
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-400">
           Session Key Manager contract is not configured. Register and Lookup will not work until
           VITE_SESSION_KEY_MANAGER_ADDRESS is set.
+        </div>
+      )}
+
+      {!isConnected && (
+        <div className="rounded-xl border border-border bg-surface p-8 text-center">
+          <div className="w-11 h-11 rounded-full bg-stark/10 border border-stark/20 flex items-center justify-center mx-auto mb-4">
+            <Wallet size={20} className="text-stark" />
+          </div>
+          <h3 className="text-sm font-semibold text-white mb-1">
+            Connect your wallet to manage session keys
+          </h3>
+          <p className="text-xs text-muted max-w-xs mx-auto mb-5">
+            You need an active connection to register, look up, or revoke session keys.
+          </p>
+          <div className="flex justify-center">
+            <WalletButton />
+          </div>
         </div>
       )}
 

@@ -1,14 +1,21 @@
-import { Bitcoin, Lock, Zap, ShieldCheck, ArrowRight, Layers, TrendingUp } from "lucide-react";
+import { Bitcoin, Lock, Zap, ShieldCheck, ArrowRight, Layers } from "lucide-react";
 import { Link } from "react-router-dom";
 import { StatCard } from "@/components/StatCard";
 import { PageShell } from "@/components/PageShell";
+import { WalletButton } from "@/components/WalletButton";
 import { useWallet } from "@/context/WalletContext";
 import { useVault } from "@/hooks/useVault";
 import { usePaymaster } from "@/hooks/usePaymaster";
-import { satsToBtc, shortAddr } from "@/lib/config";
+import { satsToBtc } from "@/lib/config";
+
+const QUICK_ACTION_STYLES: Record<string, { bg: string; text: string; border: string }> = {
+  btc:     { bg: "bg-btc/10",     text: "text-btc",     border: "" },
+  privacy: { bg: "bg-privacy/10", text: "text-privacy", border: "" },
+  stark:   { bg: "bg-stark/10",   text: "text-stark",   border: "" },
+};
 
 export default function Dashboard() {
-  const { isConnected, address } = useWallet();
+  const { isConnected } = useWallet();
   const { state: vault } = useVault();
   const { state: paymaster } = usePaymaster();
 
@@ -110,8 +117,8 @@ export default function Dashboard() {
                   className="flex items-center justify-between p-4 rounded-xl border border-border bg-surface hover:border-border-bright hover:bg-surface-2 transition-all group"
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-lg bg-${color}/10 flex items-center justify-center flex-shrink-0`}>
-                      <Icon size={15} className={`text-${color}`} />
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${QUICK_ACTION_STYLES[color]?.bg ?? "bg-muted/10"}`}>
+                      <Icon size={15} className={QUICK_ACTION_STYLES[color]?.text ?? "text-muted"} />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-white">{label}</p>
@@ -163,13 +170,13 @@ export default function Dashboard() {
           <h3 className="text-base font-semibold text-white mb-2">
             Connect your wallet to get started
           </h3>
-          <p className="text-sm text-muted max-w-sm mx-auto">
+          <p className="text-sm text-muted max-w-sm mx-auto mb-5">
             Connect Argent X or Braavos to deposit WBTC, prove collateral, and
             access DeFi without revealing your balance.
           </p>
-          {address && (
-            <p className="mt-3 text-xs text-muted font-mono">{shortAddr(address)}</p>
-          )}
+          <div className="flex justify-center">
+            <WalletButton />
+          </div>
         </div>
       )}
     </PageShell>

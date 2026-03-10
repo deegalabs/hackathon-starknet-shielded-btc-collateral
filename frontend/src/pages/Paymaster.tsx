@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Zap, CheckCircle, XCircle, Users } from "lucide-react";
+import { Zap, CheckCircle, XCircle, Users, ShieldCheck } from "lucide-react";
 import { PageShell } from "@/components/PageShell";
 import { RefreshButton } from "@/components/RefreshButton";
 import { usePaymaster } from "@/hooks/usePaymaster";
@@ -56,7 +56,7 @@ export default function Paymaster() {
     >
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <StatCard
           title="Gas Budget"
           value={state.remainingBudget.toLocaleString()}
@@ -71,6 +71,20 @@ export default function Paymaster() {
           subtitle="Minimum collateral required"
           icon={Users}
           accent="privacy"
+          loading={state.isLoading}
+        />
+        <StatCard
+          title="Your Status"
+          value={state.isEligible ? "Eligible ✓" : "Not eligible"}
+          subtitle={
+            state.isEligible
+              ? "Gas fees sponsored"
+              : hasCollateral
+                ? "Check budget / threshold"
+                : "Deposit BTC first"
+          }
+          icon={ShieldCheck}
+          accent={state.isEligible ? "privacy" : "default"}
           loading={state.isLoading}
         />
       </div>

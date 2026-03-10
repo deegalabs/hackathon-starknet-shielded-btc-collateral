@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { TrendingUp, TrendingDown, ShieldCheck, Info, Layers } from "lucide-react";
+import { TrendingUp, TrendingDown, ShieldCheck, Info, Layers, Lock } from "lucide-react";
 import { PageShell } from "@/components/PageShell";
 import { RefreshButton } from "@/components/RefreshButton";
 import { clsx } from "clsx";
@@ -83,7 +83,7 @@ export default function Lending() {
 
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <StatCard
           title="Borrow Limit"
           value={
@@ -110,6 +110,18 @@ export default function Lending() {
           subtitle={hasDebt ? `${utilizationPct}% utilized` : "No loan"}
           icon={TrendingDown}
           accent={hasDebt ? "btc" : "default"}
+          loading={state.isLoading}
+        />
+        <StatCard
+          title="Collateral"
+          value={hasCollateral ? "Active ✓" : "—"}
+          subtitle={
+            hasCollateral
+              ? "Private — commitment on-chain"
+              : "Deposit BTC in the Vault first"
+          }
+          icon={Lock}
+          accent={hasCollateral ? "privacy" : "default"}
           loading={state.isLoading}
         />
       </div>
