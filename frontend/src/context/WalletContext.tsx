@@ -194,17 +194,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setContracts(buildContracts(provider));
   }, []);
 
-  // Auto-reconnect only if user explicitly connected before (our own key, not get-starknet's)
-  // We use "shielded-btc-last-wallet" to avoid collisions with the library's gsw-last-wallet,
-  // which could cause silent reconnects and MetaMask popup on fresh page loads.
+  // Auto-reconnect only if user explicitly connected before.
+  // Check our key first; fall back to get-starknet's key for backward compat
+  // (users who connected before the key migration still reconnect automatically).
   useEffect(() => {
-    const lastWallet = localStorage.getItem("shielded-btc-last-wallet");
+    const lastWallet =
+      localStorage.getItem("shielded-btc-last-wallet") ??
+      localStorage.getItem("gsw-last-wallet");
     if (!lastWallet) return;
 
     (async () => {
       try {
         // neverAsk: silently attempt reconnect, never show a modal or popup
-        // include: only Starknet-native wallets — prevents MetaMask Snap from triggering
+        // include: only Starknet-native wallets — prevents MetaMask Snap from triggering.
+        // It is safe to call enable() here because the include filter guarantees
+        // the returned wallet is argentX, braavos, or argentMobile — never MetaMask.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const wallet = await connect({
           modalMode: "neverAsk",
@@ -212,12 +216,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }) as any;
         if (!wallet) return;
 
-        // Do NOT call wallet.enable() in silent reconnect — it can trigger
-        // permission popups. Only reconnect if the wallet is already authorized.
+        // Restore the session — enable() is safe because the include filter already
+        // excluded MetaMask, so this will never trigger a MetaMask popup.
         if (!wallet.isConnected || !wallet.account) {
-          // Previously connected wallet is no longer authorized — clear stored key
-          localStorage.removeItem("shielded-btc-last-wallet");
-          return;
+          await wallet.enable({ starknetVersion: "v5" }).catch(() => wallet.enable());
         }
 
         const acc = wallet.account;
@@ -227,10 +229,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           setAddress(addr as string);
           setWalletName((wallet.name ?? "Wallet") as string);
           setConnectMethod("extension");
+          // Migrate old key to new key if needed
+          if (!localStorage.getItem("shielded-btc-last-wallet")) {
+            localStorage.setItem("shielded-btc-last-wallet", wallet.id ?? wallet.name ?? "extension");
+            localStorage.removeItem("gsw-last-wallet");
+          }
         }
       } catch {
-        // Wallet no longer available — clear stale key
+        // Wallet no longer available — clear stale keys
         localStorage.removeItem("shielded-btc-last-wallet");
+        localStorage.removeItem("gsw-last-wallet");
       }
     })();
   }, []);

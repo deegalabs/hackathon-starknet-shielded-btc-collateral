@@ -7,7 +7,7 @@ import { useVault } from "@/hooks/useVault";
 import { useWallet } from "@/context/WalletContext";
 import { StatCard } from "@/components/StatCard";
 import { TxToast } from "@/components/TxToast";
-import { btcToSats, satsToBtc } from "@/lib/config";
+import { satsToBtc } from "@/lib/config";
 
 export default function Paymaster() {
   const { isConnected } = useWallet();
@@ -17,9 +17,16 @@ export default function Paymaster() {
   const [fundAmount, setFundAmount] = useState("");
 
   const handleFund = async () => {
-    const sats = btcToSats(fundAmount);
-    if (sats <= 0n) return;
-    await fundBudget(sats);
+    const raw = fundAmount.trim();
+    if (!raw || raw === "0") return;
+    let amount: bigint;
+    try {
+      amount = BigInt(Math.round(Number(raw)));
+    } catch {
+      return;
+    }
+    if (amount <= 0n) return;
+    await fundBudget(amount);
     setFundAmount("");
   };
 
@@ -161,7 +168,7 @@ export default function Paymaster() {
 
         <div>
           <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-2">
-            Amount (satoshis)
+            Amount (raw units)
           </label>
           <div className="flex gap-2">
             <input
@@ -172,12 +179,16 @@ export default function Paymaster() {
               className="flex-1 bg-surface-2 border border-border rounded-lg px-4 py-3 text-white placeholder-muted font-mono text-sm focus:outline-none focus:border-stark transition-colors"
             />
           </div>
+          <p className="text-xs text-muted mt-1">
+            Enter a raw integer — e.g. <span className="font-mono text-white">1000000</span> adds 1,000,000 units to the gas budget.
+          </p>
         </div>
 
         <button
           disabled={
             !isConnected ||
-            btcToSats(fundAmount) <= 0n ||
+            !fundAmount ||
+            Number(fundAmount) <= 0 ||
             tx.status === "pending"
           }
           onClick={handleFund}
