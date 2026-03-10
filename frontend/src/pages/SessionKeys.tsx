@@ -34,7 +34,12 @@ export default function SessionKeys() {
 
   const [lookupKey, setLookupKey] = useState("");
   const [sessionInfo, setSessionInfo] = useState<SessionKeyInfo | null>(null);
+  const [lookupAttempted, setLookupAttempted] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  /** Guardar última public key registrada para copiar / Lookup / Revoke depois */
+  const [lastRegisteredPubKey, setLastRegisteredPubKey] = useState<string | null>(null);
+
+  const hasSkm = Boolean(CONTRACTS.SESSION_KEY_MANAGER);
 
   const handleGenerate = () => {
     setGeneratedKey(generateKeyPair());
@@ -44,18 +49,22 @@ export default function SessionKeys() {
     if (!generatedKey) return;
     const expiryTs = Math.floor(Date.now() / 1000) + Number(expiryDays) * 86400;
     const limitSats = BigInt(Math.round(parseFloat(spendingLimit) * 1e8));
-    await registerSession(
+    const ok = await registerSession(
       generatedKey.publicKey,
       expiryTs,
       limitSats,
       allowedContract || "0x0",
     );
-    setShowRegister(false);
-    setGeneratedKey(null);
+    if (ok) {
+      setLastRegisteredPubKey(generatedKey.publicKey);
+      setShowRegister(false);
+      setGeneratedKey(null);
+    }
   };
 
   const handleLookup = async () => {
     if (!lookupKey) return;
+    setLookupAttempted(true);
     const info = await getSessionInfo(lookupKey);
     setSessionInfo(info);
   };
@@ -88,6 +97,52 @@ export default function SessionKeys() {
           optional contract restriction. DApps sign with this key — your main key stays safe.
         </p>
       </div>
+
+      {!hasSkm && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-400">
+          Session Key Manager contract is not configured. Register and Lookup will not work until
+          VITE_SESSION_KEY_MANAGER_ADDRESS is set.
+        </div>
+      )}
+
+      {/* Last registered key — for copy / Lookup / Revoke */}
+      {lastRegisteredPubKey && (
+        <div className="rounded-xl border border-privacy/30 bg-privacy/5 p-4">
+          <p className="text-xs font-medium text-muted uppercase tracking-wider mb-2">
+            Last registered key — save for Lookup / Revoke
+          </p>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-mono text-white truncate flex-1">
+              {shortAddr(lastRegisteredPubKey)}
+            </span>
+            <button
+              onClick={() => copyToClipboard(lastRegisteredPubKey, "last")}
+              className="text-muted hover:text-white"
+              title="Copy full public key"
+            >
+              {copied === "last" ? (
+                <CheckCircle size={14} className="text-privacy" />
+              ) : (
+                <Copy size={14} />
+              )}
+            </button>
+            <button
+              onClick={async () => {
+                setLookupKey(lastRegisteredPubKey);
+                setLookupAttempted(true);
+                const info = await getSessionInfo(lastRegisteredPubKey);
+                setSessionInfo(info);
+              }}
+              className="text-xs text-stark hover:text-white"
+            >
+              Use in Lookup
+            </button>
+          </div>
+          <p className="text-xs text-muted mt-2">
+            If you lose the public key, the session expires after the configured days; revoke requires the public key.
+          </p>
+        </div>
+      )}
 
       {/* Register new key */}
       <div className="rounded-xl border border-border bg-surface overflow-hidden">
@@ -256,6 +311,11 @@ export default function SessionKeys() {
           </button>
         </div>
 
+        {lookupAttempted && !sessionInfo && (
+          <div className="rounded-xl border border-border bg-surface-2 p-4 text-center text-sm text-muted">
+            Session key not found. Check the public key or register one first.
+          </div>
+        )}
         {sessionInfo && (
           <div
             className={clsx(

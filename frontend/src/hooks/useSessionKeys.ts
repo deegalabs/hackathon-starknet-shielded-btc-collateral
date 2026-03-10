@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { cairo, ec, stark } from "starknet";
 import { useWallet } from "@/context/WalletContext";
+import { shortAddr } from "@/lib/config";
 import type { TxState } from "./useVault";
 
 export interface SessionKeyInfo {
@@ -34,8 +35,11 @@ export function useSessionKeys() {
       expiryTimestamp: number,
       spendingLimit: bigint,
       allowedContract: string,
-    ) => {
-      if (!account || !contracts.skm) return;
+    ): Promise<boolean> => {
+      if (!account || !contracts.skm) {
+        setTx({ status: "error", hash: null, message: "Session Key Manager not configured" });
+        return false;
+      }
       setTx({ status: "pending", hash: null, message: "Registering session key..." });
       try {
         const regTx = await contracts.skm.invoke("register_session", [
@@ -44,11 +48,21 @@ export function useSessionKeys() {
           cairo.uint256(spendingLimit),
           allowedContract,
         ]);
-        await provider.waitForTransaction(regTx.transaction_hash);
-        setTx({ status: "success", hash: regTx.transaction_hash, message: "Session key registered!" });
+        setTx({ status: "pending", hash: regTx.transaction_hash, message: "Waiting confirmation..." });
+        await provider.waitForTransaction(regTx.transaction_hash, {
+          retryInterval: 4000,
+          successStates: ["ACCEPTED_ON_L2", "ACCEPTED_ON_L1"],
+        });
+        setTx({
+          status: "success",
+          hash: regTx.transaction_hash,
+          message: `Session key registered! Key: ${shortAddr(sessionPubKey)}`,
+        });
+        return true;
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Registration failed";
         setTx({ status: "error", hash: null, message: msg });
+        return false;
       }
     },
     [account, contracts, provider],
@@ -73,16 +87,19 @@ export function useSessionKeys() {
   const getSessionInfo = useCallback(
     async (sessionPubKey: string): Promise<SessionKeyInfo | null> => {
       if (!contracts.skm || !address) return null;
+      const key = sessionPubKey.trim().startsWith("0x")
+        ? sessionPubKey.trim()
+        : `0x${sessionPubKey.trim()}`;
       try {
         const [isValid, info] = await Promise.all([
-          contracts.skm.is_valid_session(address, sessionPubKey),
-          contracts.skm.get_session_info(address, sessionPubKey),
+          contracts.skm.is_valid_session(address, key),
+          contracts.skm.get_session_info(address, key),
         ]);
         const [expiry, limit, spent, allowedContract, isActive] = info as [
           bigint, unknown, unknown, string, boolean
         ];
         return {
-          pubKey: sessionPubKey,
+          pubKey: key,
           expiryTimestamp: Number(expiry),
           spendingLimit: extractU256(limit),
           spent: extractU256(spent),
@@ -90,7 +107,8 @@ export function useSessionKeys() {
           isActive: Boolean(isActive),
           isValid: Boolean(isValid),
         };
-      } catch {
+      } catch (err) {
+        console.error("[SessionKeys] getSessionInfo failed:", err);
         return null;
       }
     },
