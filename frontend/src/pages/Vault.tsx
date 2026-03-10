@@ -128,7 +128,14 @@ export default function Vault() {
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
+        <StatCard
+          title="WBTC Balance"
+          value={`${satsToBtc(state.wbtcBalance)} BTC`}
+          subtitle={state.wbtcBalance > 0n ? "Available to deposit" : "No WBTC in wallet"}
+          icon={Bitcoin}
+          accent={state.wbtcBalance > 0n ? "btc" : "default"}
+        />
         <StatCard
           title="Your Commitment"
           value={hasDeposit ? "Active" : "—"}
@@ -195,9 +202,19 @@ export default function Vault() {
             <>
               {/* Amount */}
               <div>
-                <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-2">
-                  Amount (BTC)
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-medium text-muted uppercase tracking-wider">
+                    Amount (BTC)
+                  </label>
+                  {state.wbtcBalance > 0n && (
+                    <button
+                      onClick={() => setDepositAmount(satsToBtc(state.wbtcBalance))}
+                      className="text-xs text-btc hover:text-white transition-colors"
+                    >
+                      Max: {satsToBtc(state.wbtcBalance)} BTC
+                    </button>
+                  )}
+                </div>
                 <input
                   type="number"
                   placeholder="0.00000000"

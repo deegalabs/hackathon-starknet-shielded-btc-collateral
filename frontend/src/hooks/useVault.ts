@@ -99,15 +99,23 @@ export function useVault() {
           "approve",
           [contracts.vault.address, cairo.uint256(amount)],
         );
-        await provider.waitForTransaction(approveTx.transaction_hash);
-        setTx({ status: "pending", hash: approveTx.transaction_hash, message: "Depositing..." });
+        setTx({ status: "pending", hash: approveTx.transaction_hash, message: "Waiting approve confirmation..." });
+        await provider.waitForTransaction(approveTx.transaction_hash, {
+          retryInterval: 4000,
+          successStates: ["ACCEPTED_ON_L2", "ACCEPTED_ON_L1"],
+        });
+        setTx({ status: "pending", hash: approveTx.transaction_hash, message: "Depositing — confirm in wallet..." });
 
         // On-chain validation: secret + commitment passed so Cairo can verify Poseidon(amount, secret) == commitment
         const depositTx = await contracts.vault.invoke(
           "deposit",
           [cairo.uint256(amount), `0x${secret.toString(16)}`, `0x${commitment.toString(16)}`],
         );
-        await provider.waitForTransaction(depositTx.transaction_hash);
+        setTx({ status: "pending", hash: depositTx.transaction_hash, message: "Waiting deposit confirmation..." });
+        await provider.waitForTransaction(depositTx.transaction_hash, {
+          retryInterval: 4000,
+          successStates: ["ACCEPTED_ON_L2", "ACCEPTED_ON_L1"],
+        });
         setTx({ status: "success", hash: depositTx.transaction_hash, message: "Deposit confirmed!" });
         await refresh();
       } catch (err) {
@@ -128,7 +136,7 @@ export function useVault() {
   const withdraw = useCallback(
     async (amount: bigint, secret: bigint, nullifier: bigint) => {
       if (!account || !contracts.vault) return;
-      setTx({ status: "pending", hash: null, message: "Withdrawing..." });
+      setTx({ status: "pending", hash: null, message: "Withdrawing — confirm in wallet..." });
       try {
         const withdrawTx = await contracts.vault.invoke(
           "withdraw",
@@ -138,7 +146,11 @@ export function useVault() {
             `0x${nullifier.toString(16)}`,
           ],
         );
-        await provider.waitForTransaction(withdrawTx.transaction_hash);
+        setTx({ status: "pending", hash: withdrawTx.transaction_hash, message: "Waiting withdrawal confirmation..." });
+        await provider.waitForTransaction(withdrawTx.transaction_hash, {
+          retryInterval: 4000,
+          successStates: ["ACCEPTED_ON_L2", "ACCEPTED_ON_L1"],
+        });
         setTx({ status: "success", hash: withdrawTx.transaction_hash, message: "Withdrawal confirmed!" });
         await refresh();
       } catch (err) {
