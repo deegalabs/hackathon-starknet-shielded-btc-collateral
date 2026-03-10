@@ -76,9 +76,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 /** Inline SVG logo — shield with ₿ inside, gradient orange→purple */
-function Logo() {
+function Logo({ size = 34 }: { size?: number }) {
   return (
-    <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width={size} height={size} viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="logoGrad" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#f7931a" />
@@ -124,12 +124,12 @@ export function Layout() {
         {/* Logo */}
         <div className="px-5 py-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <Logo />
+            <Logo size={46} />
             <div className="leading-tight">
-              <p className="text-[13px] font-bold text-white tracking-tight">
+              <p className="text-[16px] font-bold text-white tracking-tight">
                 Shielded<span className="text-btc">BTC</span>
               </p>
-              <p className="text-[10px] text-muted tracking-wide">Collateral Protocol</p>
+              <p className="text-[11px] text-muted tracking-wide">Collateral Protocol</p>
             </div>
           </div>
         </div>
@@ -211,7 +211,7 @@ export function Layout() {
         {/* Top bar */}
         <header className="h-14 border-b border-border flex items-center justify-between px-6 flex-shrink-0">
           <div className="flex items-center gap-2 md:hidden">
-            <Logo />
+            <Logo size={28} />
             <span className="text-sm font-bold">Shielded<span className="text-btc">BTC</span></span>
           </div>
           <div className="hidden md:block" />
