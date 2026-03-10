@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { cairo } from "starknet";
 import { useWallet } from "@/context/WalletContext";
-import { waitTx } from "@/lib/tx";
+import { waitTx, extractU256 } from "@/lib/tx";
 import type { TxState } from "./useVault";
 
 export interface PaymasterState {
@@ -12,10 +12,6 @@ export interface PaymasterState {
   error: string | null;
 }
 
-function extractU256(val: unknown): bigint {
-  const obj = val as Record<string, unknown>;
-  return obj?.low !== undefined ? BigInt(String(obj.low)) : BigInt(String(val));
-}
 
 export function usePaymaster() {
   const { account, address, contracts, provider } = useWallet();

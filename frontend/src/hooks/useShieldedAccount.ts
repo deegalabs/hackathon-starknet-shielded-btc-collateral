@@ -16,6 +16,7 @@
 import { useState, useCallback } from "react";
 import { Account, CallData, ec, stark, type AccountInterface, type RpcProvider } from "starknet";
 import { CONTRACTS, SHIELDED_ACCOUNT_CLASS_HASH } from "@/lib/config";
+import { waitTx } from "@/lib/tx";
 
 export type DeployStatus =
   | "idle"
@@ -113,7 +114,7 @@ export function useShieldedAccount() {
         setStatus("confirming");
 
         // ── 3. Wait for inclusion ────────────────────────────────────────────
-        await provider.waitForTransaction(deployResult.transaction_hash);
+        await waitTx(provider, deployResult.transaction_hash);
 
         // ── 4. Persist (session = private key, local = address info) ────────
         sessionStorage.setItem(PRIVKEY_SESSION_KEY, privateKey);

@@ -1,6 +1,15 @@
 import type { RpcProvider } from "starknet";
 
 /**
+ * Extract a u256 value from starknet.js response.
+ * starknet.js may return u256 as { low, high } object or as a plain bigint string.
+ */
+export function extractU256(val: unknown): bigint {
+  const obj = val as Record<string, unknown>;
+  return obj?.low !== undefined ? BigInt(String(obj.low)) : BigInt(String(val));
+}
+
+/**
  * Wait for transaction with successStates + a hard timeout.
  * Prevents hooks from hanging forever when devnet is slow or a tx is reverted.
  */

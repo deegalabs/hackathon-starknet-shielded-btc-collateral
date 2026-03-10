@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { cairo, ec, stark } from "starknet";
 import { useWallet } from "@/context/WalletContext";
+import { waitTx, extractU256 } from "@/lib/tx";
 import { shortAddr } from "@/lib/config";
 import type { TxState } from "./useVault";
 
@@ -14,10 +15,6 @@ export interface SessionKeyInfo {
   isValid: boolean;
 }
 
-function extractU256(val: unknown): bigint {
-  const obj = val as Record<string, unknown>;
-  return obj?.low !== undefined ? BigInt(String(obj.low)) : BigInt(String(val));
-}
 
 export function useSessionKeys() {
   const { account, address, contracts, provider } = useWallet();
@@ -49,10 +46,7 @@ export function useSessionKeys() {
           allowedContract,
         ]);
         setTx({ status: "pending", hash: regTx.transaction_hash, message: "Waiting confirmation..." });
-        await provider.waitForTransaction(regTx.transaction_hash, {
-          retryInterval: 4000,
-          successStates: ["ACCEPTED_ON_L2", "ACCEPTED_ON_L1"],
-        });
+        await waitTx(provider, regTx.transaction_hash);
         setTx({
           status: "success",
           hash: regTx.transaction_hash,
@@ -74,7 +68,7 @@ export function useSessionKeys() {
       setTx({ status: "pending", hash: null, message: "Revoking session key..." });
       try {
         const revokeTx = await contracts.skm.invoke("revoke_session", [sessionPubKey]);
-        await provider.waitForTransaction(revokeTx.transaction_hash);
+        await waitTx(provider, revokeTx.transaction_hash);
         setTx({ status: "success", hash: revokeTx.transaction_hash, message: "Session key revoked!" });
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Revocation failed";

@@ -367,7 +367,7 @@ export default function LandingPage() {
               Open Source
             </a>
             <span>·</span>
-            <span>Starknet Hackathon 2025</span>
+            <span>Starknet Hackathon 2026</span>
             <span>·</span>
             <a
               href="https://www.starknet.io"
