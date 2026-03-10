@@ -15,19 +15,31 @@ use starknet::ContractAddress;
 ///   - Removes trust assumption on frontend computation
 ///   - MVP note: `secret` is in calldata (visible on-chain); production would
 ///     use a ZK proof to avoid this. Acknowledged trade-off for MVP scope.
+///
+/// [ZK Range Proof upgrade — Phase 2]
+///   - `deposit` now also accepts `bn254_commitment` for ZK proof path
+///   - `prove_collateral` uses bn254_commitment + Garaga HonkVerifier
+///   - `get_bn254_commitment` added for frontend to read stored BN254 commitment
 #[starknet::interface]
 pub trait ICollateralVault<TContractState> {
-    /// Deposit WBTC privately.
-    /// The actual amount is hidden behind a Poseidon commitment.
+    /// Deposit WBTC privately with dual-field Poseidon commitment.
     ///
-    /// On-chain validates: Poseidon(amount_low, amount_high, secret) == commitment
-    /// This enforces commitment integrity without relying on frontend computation.
+    /// On-chain validates Stark commitment: Poseidon_Stark(amount_low, amount_high, secret) == commitment
+    /// BN254 commitment is stored for ZK range proof path (prove_collateral).
     ///
-    /// MVP note: `secret` is visible in calldata. In production this would be
-    /// replaced by a ZK proof of commitment correctness.
+    /// `commitment`: Stark-field Poseidon hash (for withdrawals)
+    /// `bn254_commitment`: BN254-field Poseidon2 hash (for ZK proofs via Garaga)
+    ///   Computed as: poseidon2([amount_field, secret, 0, 0], t=4)[0]
     ///
-    /// Reverts if: amount == 0, commitment == 0, invalid preimage, or active commitment exists.
-    fn deposit(ref self: TContractState, amount: u256, secret: felt252, commitment: felt252);
+    /// Reverts if: amount == 0, commitment == 0, bn254_commitment == 0,
+    ///             invalid preimage, or active commitment exists.
+    fn deposit(
+        ref self: TContractState,
+        amount: u256,
+        secret: felt252,
+        commitment: felt252,
+        bn254_commitment: felt252,
+    );
 
     /// Prove that a user's committed collateral meets or exceeds a threshold.
     ///
@@ -56,8 +68,12 @@ pub trait ICollateralVault<TContractState> {
     /// Reverts if: nullifier used, no active commitment, invalid preimage, or invalid nullifier.
     fn withdraw(ref self: TContractState, amount: u256, secret: felt252, nullifier: felt252);
 
-    /// Returns the stored commitment for a user (0 if none).
+    /// Returns the stored Stark-field commitment for a user (0 if none).
     fn get_commitment(self: @TContractState, user: ContractAddress) -> felt252;
+
+    /// Returns the stored BN254-field commitment for a user (0 if none).
+    /// This commitment is used by prove_collateral() for ZK range proof verification.
+    fn get_bn254_commitment(self: @TContractState, user: ContractAddress) -> felt252;
 
     /// Returns the total WBTC locked in the vault.
     fn get_total_locked(self: @TContractState) -> u256;
