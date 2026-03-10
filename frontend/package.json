@@ -9,8 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@aztec/bb.js": "3.0.0-nightly.20251104",
+    "@noir-lang/noir_js": "1.0.0-beta.16",
     "@starknet-io/get-starknet": "^4.0.0",
     "clsx": "^2.1.1",
+    "garaga": "1.0.1",
     "lucide-react": "^0.469.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
