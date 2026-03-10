@@ -30,6 +30,17 @@ export STARKNET_ACCOUNT=~/.starknet_accounts/sepolia.json
 export STARKNET_RPC=https://starknet-sepolia.public.blastapi.io
 ```
 
+## Build time (ZK verifier)
+
+The full build includes the Garaga-generated UltraKeccakZKHonk verifier and the ZK range proof circuit. **The first `scarb build` can take ~15–30 minutes** (CPU-bound). Subsequent incremental builds are faster.
+
+To build and run tests:
+```bash
+cd contracts
+scarb build          # full build with ZK (~15–30 min first time)
+snforge test         # run tests after build
+```
+
 ## Deployment
 
 ### Automated (Recommended)
@@ -41,7 +52,7 @@ export STARKNET_RPC=https://starknet-sepolia.public.blastapi.io
 
 This script will:
 1. Build all Cairo contracts (`scarb build`)
-2. Declare all 7 contract classes on Sepolia
+2. Declare all contract classes on Sepolia (including UltraKeccakZKHonkVerifier and ZKRangeProofVerifier when ZK is enabled)
 3. Deploy all contracts with correct constructor args
 4. Call `set_verifier` on the vault
 5. Save addresses to `scripts/deployment/sepolia.json`

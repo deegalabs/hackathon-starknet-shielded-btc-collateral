@@ -112,7 +112,9 @@ echo ""
 log "=== DECLARING CONTRACTS ==="
 
 WBTC_CLASS_HASH=$(declare_contract "MockERC20")
-VERIFIER_CLASS_HASH=$(declare_contract "StubProofVerifier")
+STUB_VERIFIER_CLASS_HASH=$(declare_contract "StubProofVerifier")
+HONK_VERIFIER_CLASS_HASH=$(declare_contract "UltraKeccakZKHonkVerifier")
+ZK_VERIFIER_CLASS_HASH=$(declare_contract "ZKRangeProofVerifier")
 VAULT_CLASS_HASH=$(declare_contract "CollateralVault")
 SESSION_CLASS_HASH=$(declare_contract "SessionKeyManager")
 PAYMASTER_CLASS_HASH=$(declare_contract "Paymaster")
@@ -129,8 +131,8 @@ WBTC_ADDRESS=$(deploy_contract "MockERC20 (WBTC)" "$WBTC_CLASS_HASH" \
     "1000000000000" "0" \
     "$DEPLOYER")
 
-# StubProofVerifier (no constructor args)
-VERIFIER_ADDRESS=$(deploy_contract "StubProofVerifier" "$VERIFIER_CLASS_HASH")
+# StubProofVerifier (no constructor args) — MVP fallback
+STUB_VERIFIER_ADDRESS=$(deploy_contract "StubProofVerifier" "$STUB_VERIFIER_CLASS_HASH")
 
 # CollateralVault (wbtc, owner)
 VAULT_ADDRESS=$(deploy_contract "CollateralVault" "$VAULT_CLASS_HASH" \
@@ -151,17 +153,26 @@ PAYMASTER_ADDRESS=$(deploy_contract "Paymaster" "$PAYMASTER_CLASS_HASH" \
 LENDING_ADDRESS=$(deploy_contract "MockLendingProtocol" "$LENDING_CLASS_HASH" \
     "$VAULT_ADDRESS")
 
-# Set verifier on vault (owner call)
+# UltraKeccakZKHonkVerifier (Garaga-generated, no constructor args)
+HONK_VERIFIER_ADDRESS=$(deploy_contract "UltraKeccakZKHonkVerifier" "$HONK_VERIFIER_CLASS_HASH")
+
+# ZKRangeProofVerifier (honk_verifier_address, owner)
+ZK_VERIFIER_ADDRESS=$(deploy_contract "ZKRangeProofVerifier" "$ZK_VERIFIER_CLASS_HASH" \
+    "$HONK_VERIFIER_ADDRESS" \
+    "$DEPLOYER")
+
+# Set ZK verifier on vault (owner call)
+# This enables real ZK range proof verification for prove_collateral()
 echo ""
-log "Setting verifier on vault..."
+log "Setting ZKRangeProofVerifier on vault..."
 sncast --account "$STARKNET_ACCOUNT" \
     --rpc-url "$STARKNET_RPC" \
     invoke \
     --contract-address "$VAULT_ADDRESS" \
     --function "set_verifier" \
-    --calldata "$VERIFIER_ADDRESS" \
+    --calldata "$ZK_VERIFIER_ADDRESS" \
     --fee-token strk
-ok "Verifier set on vault"
+ok "ZK verifier set on vault"
 
 # ── Save deployment manifest ───────────────────────────────────────────────────
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -179,10 +190,20 @@ cat > "$DEPLOYMENT_DIR/sepolia.json" <<EOF
       "class_hash": "$WBTC_CLASS_HASH",
       "note": "MockERC20, 8 decimals, 1T initial supply to deployer"
     },
-    "verifier": {
-      "address": "$VERIFIER_ADDRESS",
-      "class_hash": "$VERIFIER_CLASS_HASH",
-      "note": "StubProofVerifier — MVP. Replace with RangeProofVerifier in production."
+    "stub_verifier": {
+      "address": "$STUB_VERIFIER_ADDRESS",
+      "class_hash": "$STUB_VERIFIER_CLASS_HASH",
+      "note": "StubProofVerifier — MVP fallback. Not set as active verifier."
+    },
+    "honk_verifier": {
+      "address": "$HONK_VERIFIER_ADDRESS",
+      "class_hash": "$HONK_VERIFIER_CLASS_HASH",
+      "note": "Garaga-generated UltraKeccakZKHonk verifier for the range proof circuit."
+    },
+    "zk_range_proof_verifier": {
+      "address": "$ZK_VERIFIER_ADDRESS",
+      "class_hash": "$ZK_VERIFIER_CLASS_HASH",
+      "note": "ZKRangeProofVerifier — wraps HonkVerifier. ACTIVE verifier on vault."
     },
     "vault": {
       "address": "$VAULT_ADDRESS",
@@ -247,13 +268,15 @@ echo "╔═══════════════════════�
 echo "║  Deployment Complete ✅                              ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
-echo "  WBTC (MockERC20):    $WBTC_ADDRESS"
-echo "  CollateralVault:     $VAULT_ADDRESS"
-echo "  StubProofVerifier:   $VERIFIER_ADDRESS"
-echo "  Paymaster:           $PAYMASTER_ADDRESS"
-echo "  SessionKeyManager:   $SESSION_ADDRESS"
-echo "  MockLending:         $LENDING_ADDRESS"
-echo "  ShieldedAccount:     $ACCOUNT_CLASS_HASH (class hash)"
+echo "  WBTC (MockERC20):        $WBTC_ADDRESS"
+echo "  CollateralVault:         $VAULT_ADDRESS"
+echo "  StubProofVerifier:       $STUB_VERIFIER_ADDRESS (fallback, inactive)"
+echo "  HonkVerifier (Garaga):   $HONK_VERIFIER_ADDRESS"
+echo "  ZKRangeProofVerifier:    $ZK_VERIFIER_ADDRESS (ACTIVE on vault)"
+echo "  Paymaster:               $PAYMASTER_ADDRESS"
+echo "  SessionKeyManager:       $SESSION_ADDRESS"
+echo "  MockLending:             $LENDING_ADDRESS"
+echo "  ShieldedAccount:         $ACCOUNT_CLASS_HASH (class hash)"
 echo ""
 echo "  🔗 Voyager: https://sepolia.voyager.online/contract/$VAULT_ADDRESS"
 echo ""
