@@ -203,6 +203,6 @@ const hasSufficientCollateral = await checkCollateral(
 
 ## Questions and Support
 
-- 📧 [dev@deegalabs.com](mailto:dev@deegalabs.com)
-- 💬 [Telegram](https://t.me/deegadan)
+- 📧 [contato@deegalabs.com.br](mailto:contato@deegalabs.com.br)
+- 💬 [Telegram @danielgorgonha1](https://t.me/danielgorgonha1)
 - 🐦 [@deegalabs](https://twitter.com/deegalabs)

@@ -431,8 +431,8 @@ Built with ❤️ by [DeegaLabs](https://deegalabs.com)
 ## 📞 Contact
 
 - 🐦 Twitter: [@deegalabs](https://twitter.com/deegalabs)
-- 💬 Telegram: [@deegadan](https://t.me/deegadan)
-- 📧 Email: [hello@deegalabs.com](mailto:hello@deegalabs.com)
+- 💬 Telegram: [@danielgorgonha1](https://t.me/danielgorgonha1)
+- 📧 Email: [contato@deegalabs.com.br](mailto:contato@deegalabs.com.br)
 
 ---
 
