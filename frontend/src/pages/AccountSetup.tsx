@@ -30,6 +30,7 @@ import { clsx } from "clsx";
 import { useWallet } from "@/context/WalletContext";
 import { useShieldedAccount } from "@/hooks/useShieldedAccount";
 import { SHIELDED_ACCOUNT_CLASS_HASH, CONTRACTS, NETWORK, RPC_URL, shortAddr } from "@/lib/config";
+import { PageShell } from "@/components/PageShell";
 
 const FEATURES = [
   {
@@ -118,13 +119,10 @@ export default function AccountSetup() {
   // ── Already deployed ─────────────────────────────────────────────────────
   if (info && status !== "error") {
     return (
-      <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
-        <div>
-          <h1 className="text-2xl font-bold text-white">My ShieldedAccount</h1>
-          <p className="text-muted text-sm mt-1">
-            Your personal Cairo smart account for the Shielded BTC protocol.
-          </p>
-        </div>
+      <PageShell
+        title="My ShieldedAccount"
+        subtitle="Your personal Cairo smart account for the Shielded BTC protocol."
+      >
 
         {/* Success banner */}
         <div className="flex items-start gap-4 p-5 rounded-xl bg-privacy/10 border border-privacy/30">
@@ -174,21 +172,16 @@ export default function AccountSetup() {
           <RefreshCw size={13} />
           Reset (deploy new account)
         </button>
-      </div>
+      </PageShell>
     );
   }
 
   // ── Deploy flow ──────────────────────────────────────────────────────────
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Create Protocol Account</h1>
-        <p className="text-muted text-sm mt-1">
-          Deploy your personal{" "}
-          <span className="text-stark font-medium">ShieldedAccount</span> — a
-          Cairo smart contract account with session keys and paymaster integration.
-        </p>
-      </div>
+    <PageShell
+      title="Create Protocol Account"
+      subtitle="Deploy your personal ShieldedAccount — a Cairo smart contract account with session keys and paymaster integration."
+    >
 
       {/* Feature highlights */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -396,7 +389,7 @@ export default function AccountSetup() {
           this key should be managed via a passkey or hardware wallet.
         </p>
       </div>
-    </div>
+    </PageShell>
   );
 }
 

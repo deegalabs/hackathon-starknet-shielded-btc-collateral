@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { TrendingUp, TrendingDown, ShieldCheck, RefreshCw, Info, Layers, ExternalLink } from "lucide-react";
+import { TrendingUp, TrendingDown, ShieldCheck, RefreshCw, Info, Layers } from "lucide-react";
+import { PageShell } from "@/components/PageShell";
 import { clsx } from "clsx";
 import { useLending } from "@/hooks/useLending";
 import { useVault } from "@/hooks/useVault";
@@ -49,7 +50,18 @@ export default function Lending() {
   };
 
   return (
-    <div className="max-w-2xl space-y-6 animate-fade-in">
+    <PageShell
+      title="DeFi Integrations"
+      subtitle={`Borrow against private BTC collateral — ${state.ltvRatio}% LTV`}
+      action={
+        <button
+          onClick={refresh}
+          className="p-2 rounded-lg text-muted hover:text-white hover:bg-surface-2 border border-border transition-colors"
+        >
+          <RefreshCw size={15} />
+        </button>
+      }
+    >
 
       {/* Integration banner */}
       <div className="rounded-xl border border-btc/20 bg-btc/5 px-4 py-3 flex items-start gap-3">
@@ -75,20 +87,6 @@ export default function Lending() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-white">DeFi Integrations</h1>
-          <p className="text-muted text-sm mt-1">
-            Borrow against private BTC collateral — {state.ltvRatio}% LTV
-          </p>
-        </div>
-        <button
-          onClick={refresh}
-          className="p-2 rounded-lg text-muted hover:text-white hover:bg-surface-2 border border-border transition-colors"
-        >
-          <RefreshCw size={15} />
-        </button>
-      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4">
@@ -284,6 +282,6 @@ export default function Lending() {
       )}
 
       <TxToast tx={tx} onClose={resetTx} />
-    </div>
+    </PageShell>
   );
 }

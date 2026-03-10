@@ -2,13 +2,11 @@ import { NavLink, Outlet } from "react-router-dom";
 import {
   LayoutDashboard,
   Vault,
-  TrendingUp,
   Zap,
   KeyRound,
-  Shield,
   UserCheck,
   ExternalLink,
-  Layers,
+  TrendingUp,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { WalletButton } from "./WalletButton";
@@ -21,13 +19,13 @@ const CORE_NAV = [
   { to: "/paymaster", icon: Zap, label: "Paymaster" },
 ];
 
-const ECOSYSTEM_NAV = [
-  { to: "/lending", icon: TrendingUp, label: "DeFi Integrations" },
-];
-
 const SETTINGS_NAV = [
   { to: "/account", icon: UserCheck, label: "My Account" },
   { to: "/session-keys", icon: KeyRound, label: "Session Keys" },
+];
+
+const ECOSYSTEM_NAV = [
+  { to: "/lending", icon: TrendingUp, label: "DeFi Integrations" },
 ];
 
 function NavItem({
@@ -49,7 +47,7 @@ function NavItem({
       end={end}
       className={({ isActive }) =>
         clsx(
-          "flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all group",
+          "flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all",
           isActive
             ? "bg-stark/15 text-white font-medium border border-stark/20"
             : "text-muted hover:text-white hover:bg-surface-2",
@@ -69,35 +67,79 @@ function NavItem({
   );
 }
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted/50 select-none">
+      {children}
+    </p>
+  );
+}
+
+/** Inline SVG logo — shield with ₿ inside, gradient orange→purple */
+function Logo() {
+  return (
+    <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="logoGrad" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#f7931a" />
+          <stop offset="55%" stopColor="#7c3aed" />
+          <stop offset="100%" stopColor="#10b981" />
+        </linearGradient>
+      </defs>
+      {/* Shield shape */}
+      <path
+        d="M17 2L4 7.5V17c0 7.18 5.58 13.9 13 15.5C24.42 30.9 30 24.18 30 17V7.5L17 2Z"
+        fill="url(#logoGrad)"
+        opacity="0.15"
+      />
+      <path
+        d="M17 2L4 7.5V17c0 7.18 5.58 13.9 13 15.5C24.42 30.9 30 24.18 30 17V7.5L17 2Z"
+        stroke="url(#logoGrad)"
+        strokeWidth="1.5"
+        fill="none"
+      />
+      {/* ₿ symbol */}
+      <text
+        x="17"
+        y="22"
+        textAnchor="middle"
+        fontSize="13"
+        fontWeight="700"
+        fontFamily="system-ui, sans-serif"
+        fill="url(#logoGrad)"
+      >
+        ₿
+      </text>
+    </svg>
+  );
+}
+
 export function Layout() {
   const { connectMethod } = useWallet();
   return (
     <div className="min-h-screen bg-background text-white flex">
       {/* Sidebar */}
-      <aside className="w-64 flex-shrink-0 border-r border-border flex-col hidden md:flex">
+      <aside className="w-60 flex-shrink-0 border-r border-border flex-col hidden md:flex">
+
         {/* Logo */}
-        <div className="px-6 py-5 border-b border-border">
+        <div className="px-5 py-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-btc via-stark to-privacy flex items-center justify-center shadow-lg">
-              <Shield size={17} className="text-white" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-white leading-tight tracking-tight">
-                Shielded BTC
+            <Logo />
+            <div className="leading-tight">
+              <p className="text-[13px] font-bold text-white tracking-tight">
+                Shielded<span className="text-btc">BTC</span>
               </p>
-              <p className="text-[11px] text-muted">Collateral Protocol</p>
+              <p className="text-[10px] text-muted tracking-wide">Collateral Protocol</p>
             </div>
           </div>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
+        {/* Main navigation */}
+        <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
 
-          {/* Zone 1 — Your Shield */}
+          {/* YOUR SHIELD */}
           <div>
-            <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted/60">
-              Your Shield
-            </p>
+            <SectionLabel>Your Shield</SectionLabel>
             <div className="space-y-0.5">
               {CORE_NAV.map(({ to, icon, label, end }) => (
                 <NavItem key={to} to={to} icon={icon} label={label} end={end} />
@@ -105,33 +147,9 @@ export function Layout() {
             </div>
           </div>
 
-          {/* Divider */}
-          <div className="border-t border-border/50" />
-
-          {/* Zone 2 — Ecosystem */}
+          {/* ACCOUNT */}
           <div>
-            <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted/60">
-              Ecosystem
-            </p>
-            <div className="space-y-0.5">
-              {ECOSYSTEM_NAV.map(({ to, icon, label }) => (
-                <NavItem key={to} to={to} icon={icon} label={label} badge="DEMO" />
-              ))}
-            </div>
-            <p className="px-3 mt-2 text-[10px] text-muted/50 leading-relaxed">
-              3rd-party protocols using{" "}
-              <span className="font-mono">prove_collateral</span>
-            </p>
-          </div>
-
-          {/* Divider */}
-          <div className="border-t border-border/50" />
-
-          {/* Zone 3 — Settings */}
-          <div>
-            <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted/60">
-              Account
-            </p>
+            <SectionLabel>Account</SectionLabel>
             <div className="space-y-0.5">
               {SETTINGS_NAV.map(({ to, icon, label }) => (
                 <NavItem key={to} to={to} icon={icon} label={label} />
@@ -141,28 +159,37 @@ export function Layout() {
 
         </nav>
 
-        {/* Footer */}
-        <div className="px-4 pb-4 border-t border-border space-y-2 pt-3">
-          {/* ShieldedAccount active badge */}
+        {/* ECOSYSTEM — bottom, separated */}
+        <div className="px-3 pb-3 border-t border-border/60 pt-3">
+          <SectionLabel>Ecosystem</SectionLabel>
+          <div className="space-y-0.5 mb-3">
+            {ECOSYSTEM_NAV.map(({ to, icon, label }) => (
+              <NavItem key={to} to={to} icon={icon} label={label} badge="DEMO" />
+            ))}
+          </div>
+          <p className="px-3 text-[10px] text-muted/40 leading-relaxed mb-3">
+            3rd-party protocols using{" "}
+            <span className="font-mono">prove_collateral</span>
+          </p>
+
+          {/* ShieldedAccount badge */}
           {connectMethod === "shielded" && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-privacy/10 border border-privacy/30">
-              <Shield size={12} className="text-privacy" />
-              <span className="text-xs text-privacy font-medium">
-                ShieldedAccount active
-              </span>
+            <div className="flex items-center gap-2 px-3 py-2 mb-2 rounded-lg bg-privacy/10 border border-privacy/30">
+              <span className="w-1.5 h-1.5 rounded-full bg-privacy animate-pulse" />
+              <span className="text-[11px] text-privacy font-medium">ShieldedAccount active</span>
             </div>
           )}
 
-          {/* Network + links */}
+          {/* Network + source */}
           <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-surface-2 border border-border">
             <div className="flex items-center gap-2">
               <div
                 className={clsx(
-                  "w-2 h-2 rounded-full",
+                  "w-1.5 h-1.5 rounded-full",
                   NETWORK === "mainnet" ? "bg-btc" : "bg-privacy animate-pulse",
                 )}
               />
-              <span className="text-xs text-muted">
+              <span className="text-[11px] text-muted">
                 {NETWORK_LABELS[NETWORK] ?? NETWORK}
               </span>
             </div>
@@ -183,18 +210,16 @@ export function Layout() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
         <header className="h-14 border-b border-border flex items-center justify-between px-6 flex-shrink-0">
-          {/* Mobile logo */}
           <div className="flex items-center gap-2 md:hidden">
-            <Shield size={18} className="text-btc" />
-            <span className="text-sm font-semibold">Shielded BTC</span>
+            <Logo />
+            <span className="text-sm font-bold">Shielded<span className="text-btc">BTC</span></span>
           </div>
-          {/* Desktop breadcrumb placeholder */}
           <div className="hidden md:block" />
           <WalletButton />
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-6 md:p-8">
           <Outlet />
         </main>
       </div>

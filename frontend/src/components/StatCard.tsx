@@ -35,17 +35,19 @@ export function StatCard({
   return (
     <div
       className={clsx(
-        "rounded-xl border p-5 transition-all hover:border-opacity-60",
+        "rounded-xl border p-4 transition-all hover:border-opacity-70 flex flex-col justify-between min-h-[96px]",
         accentStyles[accent],
         className,
       )}
     >
-      <div className="flex items-start justify-between mb-3">
-        <p className="text-sm text-muted">{title}</p>
-        <Icon size={18} className={iconStyles[accent]} />
+      <div className="flex items-start justify-between mb-2">
+        <p className="text-xs font-medium text-muted uppercase tracking-wide">{title}</p>
+        <Icon size={16} className={clsx(iconStyles[accent], "flex-shrink-0")} />
       </div>
-      <p className="text-2xl font-semibold text-white tracking-tight">{value}</p>
-      {subtitle && <p className="text-xs text-muted mt-1">{subtitle}</p>}
+      <div>
+        <p className="text-xl font-bold text-white tracking-tight leading-tight truncate">{value}</p>
+        {subtitle && <p className="text-xs text-muted mt-1 leading-snug">{subtitle}</p>}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Zap, CheckCircle, XCircle, RefreshCw, Users } from "lucide-react";
+import { PageShell } from "@/components/PageShell";
 import { usePaymaster } from "@/hooks/usePaymaster";
 import { useVault } from "@/hooks/useVault";
 import { useWallet } from "@/context/WalletContext";
@@ -47,21 +48,18 @@ export default function Paymaster() {
   })();
 
   return (
-    <div className="max-w-2xl space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-white">Paymaster</h1>
-          <p className="text-muted text-sm mt-1">
-            Gasless transactions for qualifying users
-          </p>
-        </div>
+    <PageShell
+      title="Paymaster"
+      subtitle="Gasless transactions for qualifying users"
+      action={
         <button
           onClick={refresh}
           className="p-2 rounded-lg text-muted hover:text-white hover:bg-surface-2 border border-border transition-colors"
         >
           <RefreshCw size={15} />
         </button>
-      </div>
+      }
+    >
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4">
@@ -96,9 +94,12 @@ export default function Paymaster() {
             <span className="text-sm text-muted">Has active commitment</span>
             <StatusIcon ok={hasCollateral} />
           </div>
-          <div className="flex items-center justify-between py-2 border-b border-border">
-            <span className="text-sm text-muted">
-              Meets threshold ({thresholdBtc})
+          <div className="flex items-center justify-between py-2 border-b border-border gap-2">
+            <span className="text-sm text-muted truncate">
+              Meets threshold
+              {thresholdBtc !== "Any deposit" && (
+                <span className="ml-1 font-mono text-xs">({thresholdBtc})</span>
+              )}
             </span>
             <StatusIcon ok={meetsThreshold} />
           </div>
@@ -177,7 +178,7 @@ export default function Paymaster() {
       </div>
 
       <TxToast tx={tx} onClose={resetTx} />
-    </div>
+    </PageShell>
   );
 }
 

@@ -1,6 +1,7 @@
 import { Bitcoin, Lock, Zap, ShieldCheck, ArrowRight, Layers, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { StatCard } from "@/components/StatCard";
+import { PageShell } from "@/components/PageShell";
 import { useWallet } from "@/context/WalletContext";
 import { useVault } from "@/hooks/useVault";
 import { usePaymaster } from "@/hooks/usePaymaster";
@@ -15,14 +16,10 @@ export default function Dashboard() {
   const hasDeposit = vault.commitment !== "0x0" && vault.commitment !== "0x" && BigInt(vault.commitment || "0") !== 0n;
 
   return (
-    <div className="max-w-5xl space-y-8 animate-fade-in">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-white">Dashboard</h1>
-        <p className="text-muted text-sm mt-1">
-          Privacy-preserving BTC collateral on Starknet
-        </p>
-      </div>
+    <PageShell
+      title="Dashboard"
+      subtitle="Privacy-preserving BTC collateral on Starknet"
+    >
 
       {/* Protocol overview */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -172,6 +169,6 @@ export default function Dashboard() {
           )}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

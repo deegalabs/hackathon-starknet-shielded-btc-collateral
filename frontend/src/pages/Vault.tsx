@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   AlertTriangle,
 } from "lucide-react";
+import { PageShell } from "@/components/PageShell";
 import { clsx } from "clsx";
 import { useVault } from "@/hooks/useVault";
 import { useWallet } from "@/context/WalletContext";
@@ -111,21 +112,18 @@ export default function Vault() {
   };
 
   return (
-    <div className="max-w-2xl space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-white">Vault</h1>
-          <p className="text-muted text-sm mt-1">
-            Deposit & withdraw with Poseidon commitment privacy
-          </p>
-        </div>
+    <PageShell
+      title="Vault"
+      subtitle="Deposit & withdraw with Poseidon commitment privacy"
+      action={
         <button
           onClick={refresh}
           className="p-2 rounded-lg text-muted hover:text-white hover:bg-surface-2 border border-border transition-colors"
         >
           <RefreshCw size={15} />
         </button>
-      </div>
+      }
+    >
 
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-4">
@@ -497,6 +495,6 @@ export default function Vault() {
       </div>
 
       <TxToast tx={tx} onClose={resetTx} />
-    </div>
+    </PageShell>
   );
 }

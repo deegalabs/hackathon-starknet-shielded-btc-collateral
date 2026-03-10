@@ -10,6 +10,7 @@ import {
   Copy,
   CheckCircle,
 } from "lucide-react";
+import { PageShell } from "@/components/PageShell";
 import { clsx } from "clsx";
 import { useSessionKeys, type SessionKeyInfo } from "@/hooks/useSessionKeys";
 import { useWallet } from "@/context/WalletContext";
@@ -81,13 +82,10 @@ export default function SessionKeys() {
   };
 
   return (
-    <div className="max-w-2xl space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-semibold text-white">Session Keys</h1>
-        <p className="text-muted text-sm mt-1">
-          Delegate limited DApp access without sharing your main private key
-        </p>
-      </div>
+    <PageShell
+      title="Session Keys"
+      subtitle="Delegate limited DApp access without sharing your main private key"
+    >
 
       {/* How it works */}
       <div className="rounded-xl border border-stark/20 bg-stark/5 p-4 text-sm">
@@ -385,7 +383,7 @@ export default function SessionKeys() {
       </div>
 
       <TxToast tx={tx} onClose={resetTx} />
-    </div>
+    </PageShell>
   );
 }
 
