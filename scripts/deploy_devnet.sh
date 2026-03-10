@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
-# deploy_devnet.sh — Deploy all contracts to local Katana devnet
+# deploy_devnet.sh — Deploy all contracts to local starknet-devnet
 # =============================================================================
 # Prerequisites:
-#   1. Katana running: katana --accounts 3 --seed 0
+#   1. starknet-devnet running: starknet-devnet --seed 0
 #   2. Scarb installed: https://docs.swmansion.com/scarb/
 #   3. Starknet Foundry installed: https://github.com/foundry-rs/starknet-foundry
 #
@@ -24,10 +24,10 @@ RED='\033[0;31m'
 CYAN='\033[0;36m'
 RESET='\033[0m'
 
-info()    { echo -e "${CYAN}  ℹ${RESET}  $1"; }
-success() { echo -e "${GREEN}  ✅${RESET}  $1"; }
-warn()    { echo -e "${YELLOW}  ⚠️${RESET}   $1"; }
-error()   { echo -e "${RED}  ❌${RESET}  $1"; exit 1; }
+info()    { echo -e "${CYAN}  ℹ${RESET}  $1" >&2; }
+success() { echo -e "${GREEN}  ✅${RESET}  $1" >&2; }
+warn()    { echo -e "${YELLOW}  ⚠️${RESET}   $1" >&2; }
+error()   { echo -e "${RED}  ❌${RESET}  $1" >&2; exit 1; }
 
 echo -e "${BOLD}"
 echo "╔══════════════════════════════════════════════════════════╗"
@@ -39,10 +39,11 @@ echo -e "${RESET}"
 # ─── Config ──────────────────────────────────────────────────────────────────
 
 RPC_URL="${STARKNET_RPC:-http://localhost:5050}"
+ACCOUNT_NAME="devnet-deployer"
 
-# Katana seed-0 account 0 (deterministic)
-DEPLOYER="0x517ececd29116499f4a1b64b094da79ba08dfd54a3edaa316134c41f8160973"
-DEPLOYER_PRIVATE_KEY="0x1800000000300000180000000000030000000000003006001800006600"
+# starknet-devnet --seed 0 first predeployed account
+DEPLOYER="0x64b48806902a367c8598f4f95c305e8c1a1acba5f082d294a43793113115691"
+DEPLOYER_PRIVATE_KEY="0x71d7bb07b9a64f6f78ac4c816aff4da9"
 
 CONTRACTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/contracts"
 DEPLOYMENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/deployment"
@@ -51,18 +52,35 @@ DEPLOYMENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/deployment"
 
 echo -e "\n${CYAN}${BOLD}━━━ Preflight checks ━━━${RESET}"
 
-# Check Katana is running
-if ! curl -sf "$RPC_URL" -d '{"jsonrpc":"2.0","method":"starknet_syncing","id":1}' \
+# Check devnet is running
+if ! curl -sf "$RPC_URL" \
+     -d '{"jsonrpc":"2.0","method":"starknet_syncing","id":1}' \
      -H "Content-Type: application/json" > /dev/null 2>&1; then
-    error "Katana devnet not running at $RPC_URL\nStart it with: katana --accounts 3 --seed 0"
+    error "starknet-devnet not running at $RPC_URL\nStart it with: starknet-devnet --seed 0"
 fi
-success "Katana devnet is running at $RPC_URL"
+success "starknet-devnet is running at $RPC_URL"
 
 # Check sncast
 if ! command -v sncast &>/dev/null; then
     error "sncast not found. Install Starknet Foundry: https://github.com/foundry-rs/starknet-foundry"
 fi
 success "sncast $(sncast --version 2>&1 | head -1)"
+
+# Import deployer account if not already present
+if ! sncast account list 2>/dev/null | grep -q "$ACCOUNT_NAME"; then
+    info "Importing devnet deployer account..."
+    sncast account import \
+        --url "$RPC_URL" \
+        --address "$DEPLOYER" \
+        --type open_zeppelin \
+        --private-key "$DEPLOYER_PRIVATE_KEY" \
+        --name "$ACCOUNT_NAME" \
+        --silent \
+        2>&1 || warn "Account import failed (may already exist)"
+    success "Account '$ACCOUNT_NAME' imported"
+else
+    success "Account '$ACCOUNT_NAME' already configured"
+fi
 
 mkdir -p "$DEPLOYMENT_DIR"
 
@@ -78,20 +96,20 @@ declare_contract() {
     local name="$1"
     info "Declaring $name..."
     local output
-    output=$(sncast --url "$RPC_URL" \
-        --account "$DEPLOYER" \
-        --private-key "$DEPLOYER_PRIVATE_KEY" \
+    output=$(sncast \
+        --account "$ACCOUNT_NAME" \
         declare \
+        --url "$RPC_URL" \
         --contract-name "$name" \
-        --fee-token strk \
         2>&1) || true
 
     local class_hash
-    class_hash=$(echo "$output" | grep -oP 'class_hash: \K0x[a-fA-F0-9]+' | head -1 || true)
+    # Fresh declaration: sncast outputs "class_hash: 0x..."
+    class_hash=$(echo "$output" | grep -oP '^class_hash: \K0x[a-fA-F0-9]+' | head -1 || true)
 
     if [[ -z "$class_hash" ]]; then
-        # Already declared — extract from error
-        class_hash=$(echo "$output" | grep -oP '0x[a-fA-F0-9]{60,}' | head -1 || true)
+        # Already declared: error message contains "class hash 0x..."
+        class_hash=$(echo "$output" | grep -oP 'Contract with class hash \K0x[a-fA-F0-9]+' | head -1 || true)
     fi
 
     if [[ -z "$class_hash" ]]; then
@@ -116,17 +134,17 @@ deploy_contract() {
     fi
 
     local output
-    output=$(sncast --url "$RPC_URL" \
-        --account "$DEPLOYER" \
-        --private-key "$DEPLOYER_PRIVATE_KEY" \
+    output=$(sncast \
+        --account "$ACCOUNT_NAME" \
         deploy \
+        --url "$RPC_URL" \
         --class-hash "$class_hash" \
-        --fee-token strk \
         $calldata_args \
         2>&1) || true
 
     local address
-    address=$(echo "$output" | grep -oP 'contract_address: \K0x[a-fA-F0-9]+' | head -1 || true)
+    # sncast 0.56.0 outputs "Contract Address: 0x..." (capital letters)
+    address=$(echo "$output" | grep -oP '^Contract Address: \K0x[a-fA-F0-9]+' | head -1 || true)
 
     if [[ -z "$address" ]]; then
         warn "Could not extract address for $name. Output: $output"
@@ -154,16 +172,13 @@ LENDING_CLASS=$(declare_contract "MockLendingProtocol")
 
 echo -e "\n${CYAN}${BOLD}━━━ Deploying contracts ━━━${RESET}"
 
-# MockERC20 (WBTC): decimals=8, initial_supply=1000000000000 (10 BTC), recipient=deployer
-WBTC_ADDRESS=$(deploy_contract "MockERC20 (WBTC)" "$WBTC_CLASS" \
-    "8" \
-    "0x1000000000000" "0x0" \
-    "$DEPLOYER")
+# MockERC20 (WBTC): constructor(decimals: u8)
+WBTC_ADDRESS=$(deploy_contract "MockERC20 (WBTC)" "$WBTC_CLASS" "8")
 
 # StubProofVerifier: no constructor args
 VERIFIER_ADDRESS=$(deploy_contract "StubProofVerifier" "$VERIFIER_CLASS")
 
-# CollateralVault: wbtc_token, owner
+# CollateralVault: constructor(wbtc_token: ContractAddress, owner: ContractAddress)
 VAULT_ADDRESS=$(deploy_contract "CollateralVault" "$VAULT_CLASS" \
     "$WBTC_ADDRESS" \
     "$DEPLOYER")
@@ -171,27 +186,42 @@ VAULT_ADDRESS=$(deploy_contract "CollateralVault" "$VAULT_CLASS" \
 # SessionKeyManager: no constructor args
 SESSION_ADDRESS=$(deploy_contract "SessionKeyManager" "$SESSION_CLASS")
 
-# Paymaster: owner
+# Paymaster: constructor(owner, vault_address, sponsorship_threshold: u256)
+# sponsorship_threshold=0 passed as two u128 felts (low, high)
 PAYMASTER_ADDRESS=$(deploy_contract "Paymaster" "$PAYMASTER_CLASS" \
-    "$DEPLOYER")
+    "$DEPLOYER" \
+    "$VAULT_ADDRESS" \
+    "0x0" "0x0")
 
-# MockLendingProtocol: wbtc_token, vault
+# MockLendingProtocol: constructor(vault_address: ContractAddress)
 LENDING_ADDRESS=$(deploy_contract "MockLendingProtocol" "$LENDING_CLASS" \
-    "$WBTC_ADDRESS" \
     "$VAULT_ADDRESS")
 
-# ─── Post-deploy: set verifier on vault ──────────────────────────────────────
+# ─── Post-deploy: mint WBTC + set verifier on vault ─────────────────────────
 
 echo -e "\n${CYAN}${BOLD}━━━ Post-deploy configuration ━━━${RESET}"
-info "Setting StubProofVerifier on CollateralVault..."
-sncast --url "$RPC_URL" \
-    --account "$DEPLOYER" \
-    --private-key "$DEPLOYER_PRIVATE_KEY" \
+
+# Mint 10 BTC (1_000_000_000 satoshis) to deployer
+# amount: u256 passed as low, high felts → 0x3B9ACA00, 0x0
+info "Minting 10 WBTC to deployer..."
+sncast \
+    --account "$ACCOUNT_NAME" \
     invoke \
+    --url "$RPC_URL" \
+    --contract-address "$WBTC_ADDRESS" \
+    --function "mint" \
+    --calldata "$DEPLOYER" "0x3B9ACA00" "0x0" \
+    > /dev/null 2>&1 || warn "mint call failed"
+success "10 WBTC minted to deployer"
+
+info "Setting StubProofVerifier on CollateralVault..."
+sncast \
+    --account "$ACCOUNT_NAME" \
+    invoke \
+    --url "$RPC_URL" \
     --contract-address "$VAULT_ADDRESS" \
     --function "set_verifier" \
     --calldata "$VERIFIER_ADDRESS" \
-    --fee-token strk \
     > /dev/null 2>&1 || warn "set_verifier call failed (may already be set)"
 success "Verifier configured on vault"
 
@@ -244,15 +274,11 @@ VITE_NETWORK=devnet
 VITE_RPC_URL=$RPC_URL
 
 VITE_WBTC_ADDRESS=$WBTC_ADDRESS
-VITE_COLLATERAL_VAULT_ADDRESS=$VAULT_ADDRESS
-VITE_STUB_VERIFIER_ADDRESS=$VERIFIER_ADDRESS
-VITE_PAYMASTER_ADDRESS=$PAYMASTER_ADDRESS
-VITE_SESSION_MANAGER_ADDRESS=$SESSION_ADDRESS
+VITE_VAULT_ADDRESS=$VAULT_ADDRESS
 VITE_LENDING_ADDRESS=$LENDING_ADDRESS
+VITE_PAYMASTER_ADDRESS=$PAYMASTER_ADDRESS
+VITE_SESSION_KEY_MANAGER_ADDRESS=$SESSION_ADDRESS
 VITE_SHIELDED_ACCOUNT_CLASS_HASH=$ACCOUNT_CLASS
-
-VITE_ENABLE_SESSION_KEYS=true
-VITE_ENABLE_PAYMASTER=true
 EOF
 
 success "deployment/devnet.json written"
