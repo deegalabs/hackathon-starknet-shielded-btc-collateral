@@ -69,8 +69,20 @@ export default function Lending() {
       <div className="grid grid-cols-2 gap-4">
         <StatCard
           title="Borrow Limit"
-          value={`${satsToBtc(state.borrowLimit)} BTC`}
-          subtitle={`${state.ltvRatio}% of collateral`}
+          value={
+            state.borrowLimit > 0n
+              ? `${satsToBtc(state.borrowLimit)} BTC`
+              : hasCollateral
+                ? "Private"
+                : "0.00000000 BTC"
+          }
+          subtitle={
+            state.borrowLimit > 0n
+              ? `${state.ltvRatio}% of collateral`
+              : hasCollateral
+                ? "Limit not exposed on-chain (privacy)"
+                : `${state.ltvRatio}% of collateral`
+          }
           icon={TrendingUp}
           accent="stark"
         />
@@ -129,6 +141,11 @@ export default function Lending() {
         {!hasCollateral ? (
           <p className="text-sm text-muted py-4 text-center">
             Deposit BTC in the Vault first to enable borrowing.
+            {state.borrowLimit === 0n && (
+              <span className="block mt-2 text-xs">
+                Using the same account that has the deposit (e.g. ShieldedAccount).
+              </span>
+            )}
           </p>
         ) : hasDebt ? (
           <p className="text-sm text-amber-400/90 flex items-start gap-2">
