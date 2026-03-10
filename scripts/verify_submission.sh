@@ -191,16 +191,16 @@ else
   fail "scripts/demo.ts MISSING"
 fi
 
-if [[ -f "deployment/.gitkeep" ]] || [[ -d "deployment" ]]; then
-  pass "deployment/ directory exists"
+if [[ -f "scripts/deployment/.gitkeep" ]] || [[ -d "scripts/deployment" ]]; then
+  pass "scripts/deployment/ directory exists"
 else
-  warn "deployment/ directory not found"
+  warn "scripts/deployment/ directory not found"
 fi
 
-if [[ -f "deployment/sepolia.json" ]]; then
-  pass "deployment/sepolia.json exists — Sepolia deployed"
+if [[ -f "scripts/deployment/sepolia.json" ]]; then
+  pass "scripts/deployment/sepolia.json exists — Sepolia deployed"
 else
-  warn "deployment/sepolia.json not found — run deploy_sepolia.sh to deploy to Sepolia"
+  warn "scripts/deployment/sepolia.json not found — run deploy_sepolia.sh to deploy to Sepolia"
 fi
 
 # ─── 7. PRIVACY MODEL ─────────────────────────────────────────────────────────

@@ -44,8 +44,8 @@ This script will:
 2. Declare all 7 contract classes on Sepolia
 3. Deploy all contracts with correct constructor args
 4. Call `set_verifier` on the vault
-5. Save addresses to `deployment/sepolia.json`
-6. Generate `deployment/frontend.env.sepolia`
+5. Save addresses to `scripts/deployment/sepolia.json`
+6. Generate `scripts/deployment/frontend.env.sepolia`
 
 ### Manual Deployment
 
@@ -77,7 +77,7 @@ After deployment:
 
 ```bash
 # Copy generated env file
-cp deployment/frontend.env.sepolia frontend/.env
+cp scripts/deployment/frontend.env.sepolia frontend/.env
 
 # Start frontend
 cd frontend && pnpm dev
@@ -91,7 +91,7 @@ Visit Voyager Explorer to verify contracts:
 https://sepolia.voyager.online/contract/<VAULT_ADDRESS>
 ```
 
-Check the `deployment/sepolia.json` file for all addresses and explorer links.
+Check the `scripts/deployment/sepolia.json` file for all addresses and explorer links.
 
 ## Contract Architecture
 

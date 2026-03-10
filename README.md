@@ -150,14 +150,14 @@ katana --accounts 3 --seed 0
 
 # Terminal 2: deploy all 7 contracts
 bash scripts/deploy_devnet.sh
-# → deployment/devnet.json  (all addresses)
-# → deployment/frontend.env.devnet  (frontend config)
+# → scripts/deployment/devnet.json  (all addresses)
+# → scripts/deployment/frontend.env.devnet  (frontend config)
 ```
 
 ### 3. Run Frontend
 
 ```bash
-cp deployment/frontend.env.devnet frontend/.env
+cp scripts/deployment/frontend.env.devnet frontend/.env
 cd frontend && pnpm install && pnpm dev
 # → http://localhost:5173
 # Connect Argent X wallet (set network to http://localhost:5050)
@@ -179,7 +179,7 @@ cp scripts/.env.example scripts/.env
 
 # Automated deployment
 bash scripts/deploy_sepolia.sh
-# → deployment/sepolia.json  +  deployment/frontend.env.sepolia
+# → scripts/deployment/sepolia.json  +  scripts/deployment/frontend.env.sepolia
 ```
 
 See [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) for the full deployment guide.
@@ -251,7 +251,7 @@ fn borrow(ref self: ContractState, amount: u256, threshold: u256, proof: Span<fe
 | Paymaster | `TBD — run deploy_sepolia.sh` | [Voyager](https://sepolia.voyager.online/) |
 | MockLendingProtocol | `TBD — run deploy_sepolia.sh` | [Voyager](https://sepolia.voyager.online/) |
 
-> After running `scripts/deploy_sepolia.sh`, addresses are written to `deployment/sepolia.json`.
+> After running `scripts/deploy_sepolia.sh`, addresses are written to `scripts/deployment/sepolia.json`.
 
 ---
 

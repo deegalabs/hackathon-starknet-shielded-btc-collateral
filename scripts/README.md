@@ -152,10 +152,14 @@ The nullifier is posted on-chain to prevent reuse. It does **not** link back to 
 
 ```
 scripts/
-├── demo.ts          # Main E2E demo — deploy + full flow
+├── deployment/           # Deploy outputs (devnet.json, frontend.env.*)
+├── deploy_devnet.sh     # Deploy to local devnet
+├── deploy_sepolia.sh    # Deploy to Starknet Sepolia
+├── verify_submission.sh # Hackathon submission checks
+├── demo.ts              # Main E2E demo — deploy + full flow
 ├── package.json
 ├── tsconfig.json
-└── README.md        # This file
+└── README.md            # This file
 ```
 
 ---

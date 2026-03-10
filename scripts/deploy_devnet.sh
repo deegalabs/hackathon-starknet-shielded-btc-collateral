@@ -11,8 +11,8 @@
 #   bash scripts/deploy_devnet.sh
 #
 # Output:
-#   deployment/devnet.json          — All contract addresses
-#   deployment/frontend.env.devnet  — Frontend .env config
+#   scripts/deployment/devnet.json          — All contract addresses
+#   scripts/deployment/frontend.env.devnet   — Frontend .env config
 # =============================================================================
 
 set -euo pipefail
@@ -46,7 +46,7 @@ DEPLOYER="0x64b48806902a367c8598f4f95c305e8c1a1acba5f082d294a43793113115691"
 DEPLOYER_PRIVATE_KEY="0x71d7bb07b9a64f6f78ac4c816aff4da9"
 
 CONTRACTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/contracts"
-DEPLOYMENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/deployment"
+DEPLOYMENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/deployment"
 
 # ─── Preflight ───────────────────────────────────────────────────────────────
 
@@ -281,8 +281,8 @@ VITE_SESSION_KEY_MANAGER_ADDRESS=$SESSION_ADDRESS
 VITE_SHIELDED_ACCOUNT_CLASS_HASH=$ACCOUNT_CLASS
 EOF
 
-success "deployment/devnet.json written"
-success "deployment/frontend.env.devnet written"
+success "scripts/deployment/devnet.json written"
+success "scripts/deployment/frontend.env.devnet written"
 
 # ─── Summary ─────────────────────────────────────────────────────────────────
 
@@ -300,7 +300,7 @@ echo "  MockLendingProtocol: $LENDING_ADDRESS"
 echo "  ShieldedAccount:     $ACCOUNT_CLASS  (class hash only)"
 echo ""
 echo -e "${BOLD}Next steps:${RESET}"
-echo "  1. cp deployment/frontend.env.devnet frontend/.env"
+echo "  1. cp scripts/deployment/frontend.env.devnet frontend/.env"
 echo "  2. cd frontend && pnpm install && pnpm dev"
 echo "  3. Open http://localhost:5173"
 echo "  4. Connect Argent X (network: http://localhost:5050)"

@@ -21,3 +21,10 @@ frontend/tsconfig.tsbuildinfo
 
 # temp
 temp/
+
+# Legacy: deployment outputs moved to scripts/deployment/ (ignore root folder only)
+/deployment/
+
+# Generated deployment artifacts (scripts write here)
+scripts/deployment/*.json
+scripts/deployment/frontend.env.*
