@@ -4,9 +4,9 @@ import { clsx } from "clsx";
 import type { TxState } from "@/hooks/useVault";
 import { NETWORK } from "@/lib/config";
 
-function starkscanUrl(hash: string): string | null {
-  if (NETWORK === "mainnet") return `https://starkscan.co/tx/${hash}`;
-  if (NETWORK === "sepolia") return `https://sepolia.starkscan.co/tx/${hash}`;
+function explorerUrl(hash: string): string | null {
+  if (NETWORK === "mainnet") return `https://voyager.online/tx/${hash}`;
+  if (NETWORK === "sepolia") return `https://sepolia.voyager.online/tx/${hash}`;
   return null;
 }
 
@@ -48,7 +48,7 @@ export function TxToast({ tx, onClose }: TxToastProps) {
         <div className="flex-1 min-w-0">
           <p className="text-sm text-white font-medium">{tx.message}</p>
           {tx.hash && (() => {
-            const url = starkscanUrl(tx.hash);
+            const url = explorerUrl(tx.hash);
             return url ? (
               <a
                 href={url}
