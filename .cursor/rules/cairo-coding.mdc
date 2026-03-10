@@ -1,0 +1,13 @@
+---
+description: Cairo/Starknet coding standards and workflow for this project
+globs: contracts/**/*.cairo
+alwaysApply: false
+---
+
+# Cairo Coding Rules
+
+- **Naming**: `snake_case` for functions; `PascalCase` for structs; descriptive variable names.
+- **Validate often**: After editing Cairo, run `scarb build` (from repo root: `cd contracts && scarb build`). Run `scarb test` or `snforge test` for tests. Do not commit broken builds.
+- **Docs**: Prefer `@Docs Cairo Book` for syntax and concepts when Cursor Docs are configured.
+- **MCP**: If Cairo Coder MCP is configured, use it for generating/refactoring contracts, implementing TODOs, and debugging compile/test errors with context.
+- **Project layout**: Contracts live under `contracts/src/`; tests under `contracts/tests/`. This repo uses Scarb with `starknet = "2.15.0"` and `edition = "2024_07"`.
