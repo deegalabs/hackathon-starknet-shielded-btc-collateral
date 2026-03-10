@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { TrendingUp, TrendingDown, ShieldCheck, RefreshCw, Info } from "lucide-react";
+import { TrendingUp, TrendingDown, ShieldCheck, RefreshCw, Info, Layers, ExternalLink } from "lucide-react";
 import { clsx } from "clsx";
 import { useLending } from "@/hooks/useLending";
 import { useVault } from "@/hooks/useVault";
@@ -50,9 +50,34 @@ export default function Lending() {
 
   return (
     <div className="max-w-2xl space-y-6 animate-fade-in">
+
+      {/* Integration banner */}
+      <div className="rounded-xl border border-btc/20 bg-btc/5 px-4 py-3 flex items-start gap-3">
+        <div className="w-7 h-7 rounded-lg bg-btc/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <Layers size={14} className="text-btc" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <p className="text-xs font-semibold text-btc uppercase tracking-wider">
+              Ecosystem Integration — Demo
+            </p>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-btc/15 text-btc font-medium">
+              MockLendingProtocol
+            </span>
+          </div>
+          <p className="text-xs text-muted leading-relaxed">
+            This is an example of how any DeFi protocol integrates with Shielded BTC.
+            It calls{" "}
+            <span className="font-mono text-white text-[11px]">vault.prove_collateral(you, required)</span>{" "}
+            — verifying your solvency <span className="text-white">without ever learning your balance</span>.
+            In production, this would be zkLend, Nostra, or any lending protocol.
+          </p>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Lending</h1>
+          <h1 className="text-2xl font-semibold text-white">DeFi Integrations</h1>
           <p className="text-muted text-sm mt-1">
             Borrow against private BTC collateral — {state.ltvRatio}% LTV
           </p>

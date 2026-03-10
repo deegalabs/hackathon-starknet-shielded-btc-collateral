@@ -27,6 +27,25 @@ export default function Paymaster() {
   // Frontend: show eligibility based on commitment existence (mirrors stub behavior)
   const meetsThreshold = hasCollateral && state.threshold > 0n;
 
+  // Threshold display: convert from raw u256 sats to BTC string, capped at sane value
+  const thresholdBtc = (() => {
+    if (state.threshold <= 0n) return "—";
+    // If threshold is unreasonably large (> 21M BTC in sats = 2_100_000_000_000_000)
+    // treat as not configured and show a short label
+    const MAX_BTC_SATS = 2_100_000_000_000_000n;
+    if (state.threshold > MAX_BTC_SATS) return "Any deposit";
+    return `${satsToBtc(state.threshold)} BTC`;
+  })();
+
+  // Eligibility reason for "not eligible" state
+  const ineligibleReason = (() => {
+    if (!isConnected) return "Connect your wallet first.";
+    if (!hasCollateral) return "Deposit BTC in the Vault to activate your commitment.";
+    if (!meetsThreshold) return "Your commitment doesn't meet the sponsorship threshold yet.";
+    if (state.remainingBudget === 0n) return "Gas budget is empty — fund the budget below or wait for a sponsor.";
+    return null;
+  })();
+
   return (
     <div className="max-w-2xl space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -55,8 +74,8 @@ export default function Paymaster() {
         />
         <StatCard
           title="Sponsorship Threshold"
-          value={`${satsToBtc(state.threshold)} BTC`}
-          subtitle="Minimum collateral"
+          value={thresholdBtc}
+          subtitle="Minimum collateral required"
           icon={Users}
           accent="privacy"
         />
@@ -79,7 +98,7 @@ export default function Paymaster() {
           </div>
           <div className="flex items-center justify-between py-2 border-b border-border">
             <span className="text-sm text-muted">
-              Meets threshold ({satsToBtc(state.threshold)} BTC)
+              Meets threshold ({thresholdBtc})
             </span>
             <StatusIcon ok={meetsThreshold} />
           </div>
@@ -104,13 +123,15 @@ export default function Paymaster() {
             </>
           ) : (
             <>
-              <XCircle size={18} className="text-muted" />
+              <XCircle size={18} className="text-amber-400/80" />
               <div>
                 <p className="text-sm font-medium text-white">
-                  Not eligible yet
+                  {state.remainingBudget === 0n && hasCollateral && meetsThreshold
+                    ? "Eligible — awaiting gas budget"
+                    : "Not eligible yet"}
                 </p>
                 <p className="text-xs text-muted">
-                  Deposit at least {satsToBtc(state.threshold)} BTC in the Vault
+                  {ineligibleReason}
                 </p>
               </div>
             </>

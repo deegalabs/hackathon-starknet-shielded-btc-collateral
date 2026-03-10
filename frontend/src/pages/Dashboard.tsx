@@ -1,24 +1,18 @@
-import { Bitcoin, Lock, TrendingUp, Zap, ShieldCheck, ArrowRight } from "lucide-react";
+import { Bitcoin, Lock, Zap, ShieldCheck, ArrowRight, Layers, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { StatCard } from "@/components/StatCard";
 import { useWallet } from "@/context/WalletContext";
 import { useVault } from "@/hooks/useVault";
-import { useLending } from "@/hooks/useLending";
 import { usePaymaster } from "@/hooks/usePaymaster";
 import { satsToBtc, shortAddr } from "@/lib/config";
 
 export default function Dashboard() {
   const { isConnected, address } = useWallet();
   const { state: vault } = useVault();
-  const { state: lending } = useLending();
   const { state: paymaster } = usePaymaster();
 
   // [H-07 Fix] Deposit detected via commitment (not plaintext amount — amounts are private)
   const hasDeposit = vault.commitment !== "0x0" && vault.commitment !== "0x" && BigInt(vault.commitment || "0") !== 0n;
-  const utilizationPct =
-    lending.borrowLimit > 0n
-      ? Number((lending.debt * 100n) / lending.borrowLimit)
-      : 0;
 
   return (
     <div className="max-w-5xl space-y-8 animate-fade-in">
@@ -31,7 +25,7 @@ export default function Dashboard() {
       </div>
 
       {/* Protocol overview */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard
           title="Total Locked"
           value={`${satsToBtc(vault.totalLocked)} BTC`}
@@ -45,17 +39,6 @@ export default function Dashboard() {
           subtitle={hasDeposit ? "Commitment active" : "No deposit yet"}
           icon={Lock}
           accent={hasDeposit ? "privacy" : "default"}
-        />
-        <StatCard
-          title="Your Debt"
-          value={lending.debt > 0n ? `${satsToBtc(lending.debt)} BTC` : "—"}
-          subtitle={
-            lending.debt > 0n
-              ? `${utilizationPct}% of limit used`
-              : "No active loan"
-          }
-          icon={TrendingUp}
-          accent={lending.debt > 0n ? "stark" : "default"}
         />
         <StatCard
           title="Gas Sponsorship"
@@ -91,54 +74,85 @@ export default function Dashboard() {
 
       {/* Quick actions */}
       {isConnected ? (
-        <div>
-          <h2 className="text-sm font-medium text-muted uppercase tracking-wider mb-3">
-            Quick Actions
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {[
-              {
-                to: "/vault",
-                label: hasDeposit ? "Manage Vault" : "Deposit BTC",
-                desc: hasDeposit ? "View or withdraw" : "Start earning",
-                color: "btc",
-              },
-              {
-                to: "/lending",
-                label: lending.debt > 0n ? "Manage Loan" : "Borrow",
-                desc: lending.debt > 0n ? "Repay debt" : "Use collateral",
-                color: "stark",
-              },
-              {
-                to: "/paymaster",
-                label: "Paymaster",
-                desc: "Gasless transactions",
-                color: "privacy",
-              },
-              {
-                to: "/session-keys",
-                label: "Session Keys",
-                desc: "Delegate DApp access",
-                color: "default",
-              },
-            ].map(({ to, label, desc, color }) => (
-              <Link
-                key={to}
-                to={to}
-                className="flex items-center justify-between p-4 rounded-xl border border-border bg-surface hover:border-border-bright hover:bg-surface-2 transition-all group"
-              >
-                <div>
-                  <p className={`text-sm font-medium text-${color === "default" ? "white" : color}`}>
-                    {label}
-                  </p>
-                  <p className="text-xs text-muted mt-0.5">{desc}</p>
+        <div className="space-y-6">
+          {/* Your Shield actions */}
+          <div>
+            <h2 className="text-xs font-semibold text-muted/60 uppercase tracking-widest mb-3">
+              Your Shield
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                {
+                  to: "/vault",
+                  label: hasDeposit ? "Manage Vault" : "Deposit BTC",
+                  desc: hasDeposit ? "View or withdraw" : "Lock BTC privately",
+                  color: "btc",
+                  icon: Bitcoin,
+                },
+                {
+                  to: "/paymaster",
+                  label: "Paymaster",
+                  desc: "Gasless transactions",
+                  color: "privacy",
+                  icon: Zap,
+                },
+                {
+                  to: "/session-keys",
+                  label: "Session Keys",
+                  desc: "Delegate DApp access",
+                  color: "stark",
+                  icon: ShieldCheck,
+                },
+              ].map(({ to, label, desc, color, icon: Icon }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  className="flex items-center justify-between p-4 rounded-xl border border-border bg-surface hover:border-border-bright hover:bg-surface-2 transition-all group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg bg-${color}/10 flex items-center justify-center flex-shrink-0`}>
+                      <Icon size={15} className={`text-${color}`} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-white">{label}</p>
+                      <p className="text-xs text-muted mt-0.5">{desc}</p>
+                    </div>
+                  </div>
+                  <ArrowRight size={14} className="text-muted group-hover:text-white transition-colors flex-shrink-0" />
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* Ecosystem */}
+          <div>
+            <h2 className="text-xs font-semibold text-muted/60 uppercase tracking-widest mb-3">
+              Ecosystem — DeFi Integrations
+            </h2>
+            <Link
+              to="/lending"
+              className="flex items-center justify-between p-4 rounded-xl border border-btc/20 bg-btc/5 hover:border-btc/40 hover:bg-btc/8 transition-all group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-btc/15 flex items-center justify-center flex-shrink-0">
+                  <Layers size={15} className="text-btc" />
                 </div>
-                <ArrowRight
-                  size={14}
-                  className="text-muted group-hover:text-white transition-colors"
-                />
-              </Link>
-            ))}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-white">MockLendingProtocol</p>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-btc/15 text-btc font-medium">DEMO</span>
+                  </div>
+                  <p className="text-xs text-muted mt-0.5">
+                    Borrow using your private BTC collateral — no balance revealed
+                  </p>
+                </div>
+              </div>
+              <ArrowRight size={14} className="text-muted group-hover:text-btc transition-colors flex-shrink-0" />
+            </Link>
+            <p className="mt-2 text-xs text-muted/50 px-1">
+              Production: zkLend, Nostra, and any protocol calling{" "}
+              <span className="font-mono">prove_collateral</span> can integrate here.
+            </p>
           </div>
         </div>
       ) : (
