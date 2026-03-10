@@ -100,7 +100,11 @@ pub mod MockLendingProtocol {
         ///
         /// The vault's prove_collateral DOES NOT reveal the exact amount deposited —
         /// it only confirms the deposited amount is >= required_collateral.
-        fn borrow(ref self: ContractState, borrow_amount: u256) {
+        ///
+        /// `proof`: ZK range proof calldata (Garaga Span<felt252>).
+        ///   MVP  : pass empty array → stub verifier (deposit existence check only).
+        ///   Prod : pass Noir UltraKeccakZKHonk calldata from Garaga SDK.
+        fn borrow(ref self: ContractState, borrow_amount: u256, proof: Span<felt252>) {
             assert(borrow_amount > 0_u256, 'Borrow amount must be positive');
 
             let borrower = get_caller_address();
@@ -117,13 +121,12 @@ pub mod MockLendingProtocol {
                 / LTV_RATIO.into();
 
             // Privacy-preserving collateral check — vault does NOT reveal exact amount.
-            // [H-07 Fix] prove_collateral now accepts a proof parameter.
-            // MVP: empty span → stub verifier returns commitment != 0 (deposit existence).
-            // Production: user-supplied STARK range proof for threshold enforcement.
+            // Production: ZK range proof verifies amount > threshold without revealing amount.
+            // MVP: empty proof → stub verifier returns commitment != 0 (deposit existence).
             let vault = ICollateralVaultDispatcher {
                 contract_address: self.vault_address.read(),
             };
-            let has_collateral = vault.prove_collateral(borrower, required_collateral, array![].span());
+            let has_collateral = vault.prove_collateral(borrower, required_collateral, proof);
             assert(has_collateral, 'Insufficient BTC collateral');
 
             // Record the debt
