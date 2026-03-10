@@ -212,19 +212,19 @@ export default function AccountSetup() {
           <WifiOff size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
           <div className="text-sm">
             <p className="text-red-300 font-medium">
-              Argent Web Wallet não pode acessar o devnet local
+              Argent Web Wallet cannot access the local devnet
             </p>
             <p className="text-muted mt-1">
-              A carteira de email roteia transações pela infraestrutura da Argent
-              (Sepolia/mainnet), mas o contrato{" "}
-              <code className="text-red-300">ShieldedAccount</code> só está
-              declarado em <code className="text-red-300">localhost:5050</code>.
+              The email wallet routes transactions through Argent&apos;s
+              infrastructure (Sepolia/mainnet), but the{" "}
+              <code className="text-red-300">ShieldedAccount</code> contract is
+              only declared on <code className="text-red-300">localhost:5050</code>.
             </p>
             <p className="text-muted mt-2">
-              Para o demo no devnet local, use a extensão{" "}
-              <span className="text-white font-medium">Argent X</span> ou{" "}
-              <span className="text-white font-medium">Braavos</span> configurada
-              com a rede{" "}
+              For the local devnet demo, use the{" "}
+              <span className="text-white font-medium">Argent X</span> or{" "}
+              <span className="text-white font-medium">Braavos</span> extension
+              configured with network{" "}
               <code className="text-white">http://localhost:5050</code>.
             </p>
           </div>
@@ -320,7 +320,7 @@ export default function AccountSetup() {
             <div>
               <p className="text-sm font-medium text-white">Devnet Faucet</p>
               <p className="text-xs text-muted mt-0.5">
-                Mint 0.5 ETH + 0.5 STRK para pagar o gas do deploy
+                Mint 0.5 ETH + 0.5 STRK to pay for deploy gas
               </p>
             </div>
           </div>

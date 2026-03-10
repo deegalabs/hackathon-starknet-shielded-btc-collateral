@@ -79,8 +79,8 @@ export function useShieldedAccount() {
           await provider.getClassByHash(SHIELDED_ACCOUNT_CLASS_HASH);
         } catch {
           throw new Error(
-            `Class hash ${SHIELDED_ACCOUNT_CLASS_HASH} não está declarado na rede atual. ` +
-            `Verifique se o devnet local está rodando e se o contrato foi declarado com o script de deploy.`,
+            `Class hash ${SHIELDED_ACCOUNT_CLASS_HASH} is not declared on the current network. ` +
+            `Ensure local devnet is running and the contract was declared via the deploy script.`,
           );
         }
 

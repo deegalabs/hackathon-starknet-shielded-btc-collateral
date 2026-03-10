@@ -36,7 +36,7 @@ export default function SessionKeys() {
   const [sessionInfo, setSessionInfo] = useState<SessionKeyInfo | null>(null);
   const [lookupAttempted, setLookupAttempted] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-  /** Guardar última public key registrada para copiar / Lookup / Revoke depois */
+  /** Store last registered public key for copy / Lookup / Revoke later */
   const [lastRegisteredPubKey, setLastRegisteredPubKey] = useState<string | null>(null);
 
   const hasSkm = Boolean(CONTRACTS.SESSION_KEY_MANAGER);
