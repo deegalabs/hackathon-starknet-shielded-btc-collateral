@@ -248,14 +248,18 @@ export default function AccountSetup() {
 
       {/* Wallet required */}
       {!account && (
-        <div className="flex items-start gap-4 p-5 rounded-xl bg-surface border border-border">
-          <UserCheck size={18} className="text-muted flex-shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white mb-1">Wallet connection required</p>
-            <p className="text-sm text-muted mb-4">
-              Connect Argent X or Braavos — your signer account pays for the
-              deployment. The ShieldedAccount becomes your protocol account afterwards.
-            </p>
+        <div className="rounded-xl border border-border bg-surface p-8 text-center">
+          <div className="w-11 h-11 rounded-full bg-stark/10 border border-stark/20 flex items-center justify-center mx-auto mb-4">
+            <UserCheck size={20} className="text-stark" />
+          </div>
+          <h3 className="text-sm font-semibold text-white mb-1">
+            Wallet connection required
+          </h3>
+          <p className="text-xs text-muted max-w-xs mx-auto mb-5">
+            Connect Argent X or Braavos — your signer account pays for the
+            deployment. The ShieldedAccount becomes your protocol account afterwards.
+          </p>
+          <div className="flex justify-center">
             <WalletButton />
           </div>
         </div>

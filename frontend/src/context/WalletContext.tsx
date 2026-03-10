@@ -99,8 +99,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const connectExtension = useCallback(async () => {
     setIsConnecting(true);
     try {
+      // alwaysAsk: shows the wallet picker modal — user explicitly chose to connect
+      // include: only show known Starknet wallets to prevent MetaMask snap from appearing
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const wallet = await connect({ modalMode: "alwaysAsk" }) as any;
+      const wallet = await connect({
+        modalMode: "alwaysAsk",
+        include: ["argentX", "braavos", "argentMobile"],
+      }) as any;
       if (!wallet) return;
 
       // get-starknet v4: wallet may not be enabled yet — call enable() to
@@ -117,7 +122,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setAddress(addr as string);
       setWalletName((wallet.name ?? "Wallet") as string);
       setConnectMethod("extension");
-      localStorage.setItem("gsw-last-wallet", wallet.id ?? wallet.name ?? "extension");
+      // Use our own key (different from get-starknet's internal gsw-last-wallet)
+      // to avoid collisions with the library's own auto-reconnect logic
+      localStorage.setItem("shielded-btc-last-wallet", wallet.id ?? wallet.name ?? "extension");
     } catch (err) {
       console.error("Extension wallet connect failed:", err);
     } finally {
@@ -177,6 +184,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch {
       // starknetkit may manage its own disconnect
     }
+    localStorage.removeItem("shielded-btc-last-wallet");
+    // Also clear get-starknet's internal key in case it was set
     localStorage.removeItem("gsw-last-wallet");
     setAccount(null);
     setAddress(null);
@@ -185,19 +194,32 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setContracts(buildContracts(provider));
   }, []);
 
-  // Auto-reconnect only if user explicitly connected before (stored in localStorage)
+  // Auto-reconnect only if user explicitly connected before (our own key, not get-starknet's)
+  // We use "shielded-btc-last-wallet" to avoid collisions with the library's gsw-last-wallet,
+  // which could cause silent reconnects and MetaMask popup on fresh page loads.
   useEffect(() => {
-    const lastWallet = localStorage.getItem("gsw-last-wallet");
+    const lastWallet = localStorage.getItem("shielded-btc-last-wallet");
     if (!lastWallet) return;
 
     (async () => {
       try {
+        // neverAsk: silently attempt reconnect, never show a modal or popup
+        // include: only Starknet-native wallets — prevents MetaMask Snap from triggering
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const wallet = await connect({ modalMode: "neverAsk" }) as any;
+        const wallet = await connect({
+          modalMode: "neverAsk",
+          include: ["argentX", "braavos", "argentMobile"],
+        }) as any;
         if (!wallet) return;
-        if (!wallet.account || !wallet.isConnected) {
-          await wallet.enable({ starknetVersion: "v5" }).catch(() => wallet.enable());
+
+        // Do NOT call wallet.enable() in silent reconnect — it can trigger
+        // permission popups. Only reconnect if the wallet is already authorized.
+        if (!wallet.isConnected || !wallet.account) {
+          // Previously connected wallet is no longer authorized — clear stored key
+          localStorage.removeItem("shielded-btc-last-wallet");
+          return;
         }
+
         const acc = wallet.account;
         const addr = wallet.selectedAddress ?? acc?.address;
         if (acc && addr) {
@@ -207,7 +229,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           setConnectMethod("extension");
         }
       } catch {
-        // Wallet no longer available
+        // Wallet no longer available — clear stale key
+        localStorage.removeItem("shielded-btc-last-wallet");
       }
     })();
   }, []);
