@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { cairo } from "starknet";
 import { useWallet } from "@/context/WalletContext";
+import { waitTx } from "@/lib/tx";
 import type { TxState } from "./useVault";
 
 export interface LendingState {
@@ -76,7 +77,8 @@ export function useLending() {
       setTx({ status: "pending", hash: null, message: "Borrowing..." });
       try {
         const borrowTx = await contracts.lending.invoke("borrow", [cairo.uint256(amount)]);
-        await provider.waitForTransaction(borrowTx.transaction_hash);
+        setTx({ status: "pending", hash: borrowTx.transaction_hash, message: "Borrowing..." });
+        await waitTx(provider, borrowTx.transaction_hash);
         setTx({ status: "success", hash: borrowTx.transaction_hash, message: "Borrow confirmed!" });
         await refresh();
       } catch (err) {
@@ -93,7 +95,8 @@ export function useLending() {
       setTx({ status: "pending", hash: null, message: "Repaying..." });
       try {
         const repayTx = await contracts.lending.invoke("repay", [cairo.uint256(amount)]);
-        await provider.waitForTransaction(repayTx.transaction_hash);
+        setTx({ status: "pending", hash: repayTx.transaction_hash, message: "Repaying..." });
+        await waitTx(provider, repayTx.transaction_hash);
         setTx({ status: "success", hash: repayTx.transaction_hash, message: "Repay confirmed!" });
         await refresh();
       } catch (err) {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { cairo } from "starknet";
 import { useWallet } from "@/context/WalletContext";
+import { waitTx } from "@/lib/tx";
 import type { TxState } from "./useVault";
 
 export interface PaymasterState {
@@ -69,7 +70,7 @@ export function usePaymaster() {
       setTx({ status: "pending", hash: null, message: "Funding budget..." });
       try {
         const fundTx = await contracts.paymaster.invoke("fund_budget", [cairo.uint256(amount)]);
-        await provider.waitForTransaction(fundTx.transaction_hash);
+        await waitTx(provider, fundTx.transaction_hash);
         setTx({ status: "success", hash: fundTx.transaction_hash, message: "Budget funded!" });
         await refresh();
       } catch (err) {
