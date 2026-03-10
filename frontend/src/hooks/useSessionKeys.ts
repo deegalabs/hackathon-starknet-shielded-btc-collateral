@@ -95,9 +95,22 @@ export function useSessionKeys() {
           contracts.skm.is_valid_session(address, key),
           contracts.skm.get_session_info(address, key),
         ]);
-        const [expiry, limit, spent, allowedContract, isActive] = info as [
-          bigint, unknown, unknown, string, boolean
-        ];
+        // starknet.js may return tuple as array or as object (e.g. { 0: x, 1: y, ... })
+        const raw = info as unknown;
+        let expiry: unknown, limit: unknown, spent: unknown, allowedContract: unknown, isActive: unknown;
+        if (Array.isArray(raw)) {
+          [expiry, limit, spent, allowedContract, isActive] = raw;
+        } else if (raw && typeof raw === "object" && "0" in raw) {
+          const o = raw as Record<string, unknown>;
+          expiry = o[0] ?? o.expiry_timestamp;
+          limit = o[1] ?? o.spending_limit;
+          spent = o[2] ?? o.spent;
+          allowedContract = o[3] ?? o.allowed_contract;
+          isActive = o[4] ?? o.is_active;
+        } else {
+          console.error("[SessionKeys] get_session_info unexpected shape:", raw);
+          return null;
+        }
         return {
           pubKey: key,
           expiryTimestamp: Number(expiry),
