@@ -2,9 +2,25 @@
 version = 1
 
 [[package]]
+name = "corelib_imports"
+version = "0.1.2"
+source = "registry+https://scarbs.xyz/"
+checksum = "sha256:feeb2b7091634356871a9f9e1c9a2e5095a5fdbd2fbab92bc4b47ff2f8744b04"
+
+[[package]]
+name = "garaga"
+version = "1.0.1"
+source = "registry+https://scarbs.xyz/"
+checksum = "sha256:66016606abe44f57781ff84919f44bebc4b3a6c6cd63f5915412086f56efaf08"
+dependencies = [
+ "corelib_imports",
+]
+
+[[package]]
 name = "shielded_btc_collateral"
 version = "0.1.0"
 dependencies = [
+ "garaga",
  "snforge_std",
 ]
 
