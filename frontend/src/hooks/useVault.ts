@@ -14,7 +14,7 @@ export interface VaultState {
 }
 
 export interface TxState {
-  status: "idle" | "pending" | "success" | "error";
+  status: "idle" | "pending" | "pending_step2" | "success" | "error";
   hash: string | null;
   message: string | null;
 }
@@ -88,12 +88,11 @@ export function useVault() {
   }, [refresh]);
 
   /**
-   * Deposit WBTC with on-chain Poseidon commitment validation.
-   * The contract validates: compute_commitment(amount, secret) == commitment
-   * This removes trust in frontend hash computation — the Cairo contract enforces it.
+   * Step 1: Approve WBTC. After confirmation, UI must show "Step 2" button; the second tx
+   * runs only on user click so the wallet gets a user gesture and shows the popup.
    */
-  const deposit = useCallback(
-    async (amount: bigint, secret: bigint, commitment: bigint) => {
+  const depositStep1 = useCallback(
+    async (amount: bigint, _secret: bigint, _commitment: bigint) => {
       if (!account || !contracts.vault || !contracts.wbtc) return;
       setTx({ status: "pending", hash: null, message: "Approving WBTC..." });
       try {
@@ -103,14 +102,28 @@ export function useVault() {
         );
         setTx({ status: "pending", hash: approveTx.transaction_hash, message: "Step 1/2 — Waiting approve confirmation (may take ~1 min on Sepolia)..." });
         await waitTx(provider, approveTx.transaction_hash);
-        setTx({ status: "pending", hash: null, message: "Step 2/2 — Confirm deposit in wallet..." });
+        setTx({ status: "pending_step2", hash: null, message: "Step 1 done. Click below to confirm deposit (Step 2)." });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Deposit failed";
+        setTx({ status: "error", hash: null, message: msg });
+      }
+    },
+    [account, contracts, provider],
+  );
 
-        // On-chain validation: secret + commitment passed so Cairo can verify Poseidon(amount, secret) == commitment
+  /**
+   * Step 2: Deposit (vault.invoke). Call this when user clicks "Confirm deposit (Step 2)".
+   * Running from a click ensures the wallet popup opens (user gesture).
+   */
+  const depositStep2 = useCallback(
+    async (amount: bigint, secret: bigint, commitment: bigint) => {
+      if (!account || !contracts.vault) return;
+      setTx({ status: "pending", hash: null, message: "Step 2/2 — Confirm deposit in wallet..." });
+      try {
         const depositTx = await contracts.vault.invoke(
           "deposit",
           [cairo.uint256(amount), `0x${secret.toString(16)}`, `0x${commitment.toString(16)}`],
         );
-
         setTx({ status: "pending", hash: depositTx.transaction_hash, message: "Waiting deposit confirmation..." });
         await waitTx(provider, depositTx.transaction_hash);
         setTx({ status: "success", hash: depositTx.transaction_hash, message: "Deposit confirmed!" });
@@ -121,6 +134,14 @@ export function useVault() {
       }
     },
     [account, contracts, provider, refresh],
+  );
+
+  /** One-call deposit (step1 + step2): use depositStep1 then have user click for step2. */
+  const deposit = useCallback(
+    async (amount: bigint, secret: bigint, commitment: bigint) => {
+      await depositStep1(amount, secret, commitment);
+    },
+    [depositStep1],
   );
 
   /**
@@ -159,5 +180,5 @@ export function useVault() {
     setTx({ status: "idle", hash: null, message: null });
   }, []);
 
-  return { state, tx, deposit, withdraw, refresh, resetTx };
+  return { state, tx, deposit, depositStep1, depositStep2, withdraw, refresh, resetTx };
 }

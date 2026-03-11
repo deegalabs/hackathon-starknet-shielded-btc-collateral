@@ -30,7 +30,7 @@ type Tab = "deposit" | "withdraw";
 
 export default function Vault() {
   const { isConnected } = useWallet();
-  const { state, tx, deposit, withdraw, refresh, resetTx } = useVault();
+  const { state, tx, deposit, depositStep2, withdraw, refresh, resetTx } = useVault();
 
   const [tab, setTab] = useState<Tab>("deposit");
 
@@ -91,8 +91,14 @@ export default function Vault() {
     const sats = btcToSats(depositAmount);
     const secretBigInt = secret ? BigInt(secret) : null;
     if (sats <= 0n || !commitment || !secretBigInt) return;
-    // On-chain Poseidon validation: pass secret so Cairo verifies compute_commitment(amount, secret) == commitment
     await deposit(sats, secretBigInt, commitment);
+  };
+
+  const handleDepositStep2 = () => {
+    const sats = btcToSats(depositAmount);
+    const secretBigInt = secret ? BigInt(secret) : null;
+    if (sats <= 0n || !commitment || !secretBigInt) return;
+    depositStep2(sats, secretBigInt, commitment);
   };
 
   /**
@@ -317,23 +323,33 @@ export default function Vault() {
                 )}
               </div>
 
-              <button
-                disabled={
-                  !isConnected ||
-                  !commitment ||
-                  state.isPaused ||
-                  hasDeposit ||
-                  tx.status === "pending"
-                }
-                onClick={handleDeposit}
-                className="w-full py-3 rounded-lg font-medium text-sm transition-all bg-btc text-white hover:bg-btc-dim disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {hasDeposit
-                  ? "Active commitment exists — withdraw first"
-                  : !isConnected
-                    ? "Connect wallet to deposit"
-                    : "Deposit & Commit"}
-              </button>
+              {tx.status === "pending_step2" ? (
+                <button
+                  type="button"
+                  onClick={handleDepositStep2}
+                  className="w-full py-3 rounded-lg font-medium text-sm transition-all bg-privacy text-white hover:bg-privacy/90 border border-privacy/30"
+                >
+                  Step 2 — Confirm deposit in wallet
+                </button>
+              ) : (
+                <button
+                  disabled={
+                    !isConnected ||
+                    !commitment ||
+                    state.isPaused ||
+                    hasDeposit ||
+                    tx.status === "pending"
+                  }
+                  onClick={handleDeposit}
+                  className="w-full py-3 rounded-lg font-medium text-sm transition-all bg-btc text-white hover:bg-btc-dim disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {hasDeposit
+                    ? "Active commitment exists — withdraw first"
+                    : !isConnected
+                      ? "Connect wallet to deposit"
+                      : "Step 1 — Approve WBTC"}
+                </button>
+              )}
             </>
           )}
 

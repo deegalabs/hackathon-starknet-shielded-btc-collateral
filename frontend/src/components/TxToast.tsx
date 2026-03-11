@@ -29,13 +29,13 @@ export function TxToast({ tx, onClose }: TxToastProps) {
       <div
         className={clsx(
           "flex items-start gap-3 px-4 py-3 rounded-xl border shadow-xl max-w-sm",
-          tx.status === "pending" && "bg-surface-2 border-border",
+          (tx.status === "pending" || tx.status === "pending_step2") && "bg-surface-2 border-border",
           tx.status === "success" && "bg-privacy/10 border-privacy/40",
           tx.status === "error" && "bg-red-500/10 border-red-500/40",
         )}
       >
         <div className="flex-shrink-0 mt-0.5">
-          {tx.status === "pending" && (
+          {(tx.status === "pending" || tx.status === "pending_step2") && (
             <Loader2 size={18} className="text-stark animate-spin" />
           )}
           {tx.status === "success" && (
@@ -67,7 +67,7 @@ export function TxToast({ tx, onClose }: TxToastProps) {
             );
           })()}
         </div>
-        {tx.status !== "pending" && (
+        {tx.status !== "pending" && tx.status !== "pending_step2" && (
           <button
             onClick={onClose}
             className="flex-shrink-0 text-muted hover:text-white transition-colors"
