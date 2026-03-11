@@ -18,6 +18,7 @@
 /// Replaces StubProofVerifier. Upgrade path: vault.set_verifier(this_address).
 #[starknet::contract]
 pub mod ZKRangeProofVerifier {
+    use core::array::{Span, SpanTrait};
     use shielded_btc_collateral::contracts::honk_verifier::honk_verifier::{
         IUltraKeccakZKHonkVerifierDispatcher, IUltraKeccakZKHonkVerifierDispatcherTrait,
     };
@@ -119,20 +120,19 @@ pub mod ZKRangeProofVerifier {
                     // Circuit public inputs order (matches main.nr fn signature):
                     //   [0] commitment  (BN254 Field → u256)
                     //   [1] threshold   (u64 → u256)
-                    if public_inputs.len() < 2 {
+                    let inputs: Span<u256> = public_inputs;
+                    if SpanTrait::len(inputs) < 2 {
                         return false;
                     }
 
                     // Extract public input[0]: BN254 commitment from the proof
-                    let proof_commitment_u256 = *public_inputs.at(0);
+                    let proof_commitment_u256 = *SpanTrait::at(inputs, 0);
 
                     // Convert the on-chain felt252 commitment to u256 for comparison.
-                    // In Cairo, felt252 implicitly converts to u256 via Into.
-                    // The BN254 commitment fits in 254 bits, safely within u256.
                     let commitment_as_u256: u256 = commitment.into();
 
                     // Extract public input[1]: threshold from the proof
-                    let proof_threshold_u256 = *public_inputs.at(1);
+                    let proof_threshold_u256 = *SpanTrait::at(inputs, 1);
 
                     // Both must match what was provided by the caller.
                     proof_commitment_u256 == commitment_as_u256
