@@ -40,7 +40,8 @@ export function useVault() {
   const [tx, setTx] = useState<TxState>({ status: "idle", hash: null, message: null });
 
   const refresh = useCallback(async () => {
-    if (!contracts.vault || !contracts.wbtc) return;
+    // Protocol-wide data (Total Locked, isPaused) only needs vault — works without wallet connected
+    if (!contracts.vault) return;
     setState((s) => ({ ...s, isLoading: true, error: null }));
     try {
       const [totalLocked, isPaused] = await Promise.all([
@@ -52,7 +53,7 @@ export function useVault() {
       let wbtcBalance = 0n;
       let wbtcAllowance = 0n;
 
-      if (address) {
+      if (address && contracts.wbtc) {
         // [H-07 Fix] get_committed_amount removed — amounts are private (commitment-only).
         const [c, bal, allow] = await Promise.all([
           contracts.vault.get_commitment(address),
