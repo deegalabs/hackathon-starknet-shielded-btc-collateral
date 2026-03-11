@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
   Bitcoin,
   Lock,
@@ -14,6 +15,7 @@ import { PageShell } from "@/components/PageShell";
 import { RefreshButton } from "@/components/RefreshButton";
 import { clsx } from "clsx";
 import { useVault } from "@/hooks/useVault";
+import { useLending } from "@/hooks/useLending";
 import { useWallet } from "@/context/WalletContext";
 import { StatCard } from "@/components/StatCard";
 import { TxToast } from "@/components/TxToast";
@@ -31,6 +33,7 @@ type Tab = "deposit" | "withdraw";
 export default function Vault() {
   const { isConnected } = useWallet();
   const { state, tx, deposit, depositStep2, withdraw, refresh, resetTx } = useVault();
+  const { state: lendingState } = useLending();
 
   const [tab, setTab] = useState<Tab>("deposit");
 
@@ -50,6 +53,8 @@ export default function Vault() {
 
   // Has active commitment on-chain (privacy model: amount is unknown from state)
   const hasDeposit = state.commitment !== "0x0" && state.commitment !== "0x" && BigInt(state.commitment) !== 0n;
+  // Block withdraw while user has active loan (vault contract doesn't lock collateral on borrow)
+  const hasActiveDebt = lendingState.debt > 0n;
 
   // Live commitment preview
   useEffect(() => {
@@ -369,6 +374,21 @@ export default function Vault() {
                     <Lock size={13} />
                     Go to Deposit
                   </button>
+                </div>
+              ) : hasActiveDebt ? (
+                <div className="text-center py-8 rounded-xl border border-amber-500/30 bg-amber-500/10">
+                  <AlertTriangle size={32} className="text-amber-400 mx-auto mb-3" />
+                  <p className="text-sm font-medium text-white mb-1">Withdraw blocked — active loan</p>
+                  <p className="text-xs text-muted mb-4">
+                    You have an outstanding debt of {satsToBtc(lendingState.debt)} BTC in DeFi Integrations.
+                    Repay the loan first, then you can withdraw your collateral here.
+                  </p>
+                  <Link
+                    to="/app/lending"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-colors"
+                  >
+                    Go to DeFi Integrations → Repay
+                  </Link>
                 </div>
               ) : (
                 <>
