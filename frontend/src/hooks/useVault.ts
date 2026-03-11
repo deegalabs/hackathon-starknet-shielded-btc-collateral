@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { cairo } from "starknet";
+import { cairo, type RpcProvider } from "starknet";
 import { useWallet } from "@/context/WalletContext";
 import { waitTx } from "@/lib/tx";
 
@@ -8,13 +8,14 @@ const WAIT_TIMEOUT_MS = 300_000; // 5 min (Sepolia can be slow)
 
 /** Same as commit 57818d2: provider.waitForTransaction. Fallback to waitTx if RPC is incompatible. */
 async function waitForTxWithTimeout(
-  provider: { waitForTransaction: (hash: string, opts: typeof WAIT_OPTIONS) => Promise<unknown> },
+  provider: RpcProvider,
   hash: string,
-  fallbackWaitTx: (provider: unknown, h: string) => Promise<void>,
+  fallbackWaitTx: (provider: RpcProvider, h: string) => Promise<void>,
 ): Promise<void> {
   try {
     await Promise.race([
-      provider.waitForTransaction(hash, WAIT_OPTIONS).then(() => {}),
+      // RpcProvider.waitForTransaction options may differ by starknet.js version; cast for compatibility
+      (provider as { waitForTransaction: (h: string, opts: unknown) => Promise<unknown> }).waitForTransaction(hash, WAIT_OPTIONS).then(() => {}),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("Transaction timed out — check the explorer for status")), WAIT_TIMEOUT_MS),
       ),
