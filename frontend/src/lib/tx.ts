@@ -10,28 +10,61 @@ export function extractU256(val: unknown): bigint {
 }
 
 /**
- * Wait for transaction with successStates + a hard timeout.
- * Prevents hooks from hanging forever when devnet is slow or a tx is reverted.
+ * Poll getTransactionReceipt until the tx reaches a final state.
  *
- * Timeout is 5 min by default — Sepolia can be slow.
- * successStates includes both finality and execution states for starknet.js v9 compatibility.
+ * Uses manual polling instead of waitForTransaction to avoid incompatibilities
+ * between starknet.js v9 (expects RPC 0.10.0) and nodes running RPC 0.9.0
+ * (e.g. cartridge.gg), where waitForTransaction throws on state mismatches.
+ *
+ * Accepted terminal states: ACCEPTED_ON_L2, ACCEPTED_ON_L1, SUCCEEDED.
+ * Error terminal states: REJECTED, REVERTED.
+ * Timeout: 5 min by default (Sepolia can be slow).
  */
 export async function waitTx(
   provider: RpcProvider,
   hash: string,
   timeoutMs = 300_000,
+  retryInterval = 4_000,
 ): Promise<void> {
-  await Promise.race([
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    provider.waitForTransaction(hash, {
-      retryInterval: 4000,
-      successStates: ["ACCEPTED_ON_L2", "ACCEPTED_ON_L1", "SUCCEEDED"] as any,
-    }),
-    new Promise<never>((_, reject) =>
-      setTimeout(
-        () => reject(new Error("Transaction timed out — check the explorer for status")),
-        timeoutMs,
-      ),
-    ),
-  ]);
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const receipt = await (provider as any).getTransactionReceipt(hash);
+      const finalityStatus: string =
+        receipt?.finality_status ?? receipt?.status ?? "";
+      const executionStatus: string = receipt?.execution_status ?? "";
+
+      const accepted =
+        finalityStatus === "ACCEPTED_ON_L2" ||
+        finalityStatus === "ACCEPTED_ON_L1" ||
+        executionStatus === "SUCCEEDED";
+
+      const failed =
+        finalityStatus === "REJECTED" ||
+        executionStatus === "REVERTED";
+
+      if (accepted) return;
+      if (failed) {
+        const reason: string = receipt?.revert_reason ?? "unknown";
+        throw new Error(`Transaction failed: ${reason}`);
+      }
+    } catch (err) {
+      // Re-throw real errors; ignore "not found yet" errors
+      if (err instanceof Error) {
+        const msg = err.message.toLowerCase();
+        const notFound =
+          msg.includes("not found") ||
+          msg.includes("transaction hash not found") ||
+          msg.includes("25:") ||
+          msg.includes("pending");
+        if (!notFound) throw err;
+      }
+    }
+
+    await new Promise((r) => setTimeout(r, retryInterval));
+  }
+
+  throw new Error("Transaction timed out — check the explorer for status");
 }
