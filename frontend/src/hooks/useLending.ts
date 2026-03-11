@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { cairo } from "starknet";
 import { useWallet } from "@/context/WalletContext";
-import { waitTx, extractU256 } from "@/lib/tx";
+import { waitTx, extractU256, toUserFriendlyError } from "@/lib/tx";
 import type { TxState } from "./useVault";
 
 export interface LendingState {
@@ -78,8 +78,7 @@ export function useLending() {
         setTx({ status: "success", hash: borrowTx.transaction_hash, message: "Borrow confirmed!" });
         await refresh();
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Borrow failed";
-        setTx({ status: "error", hash: null, message: msg });
+        setTx({ status: "error", hash: null, message: toUserFriendlyError(err) || "Borrow failed" });
       }
     },
     [account, contracts, provider, refresh],
@@ -96,8 +95,7 @@ export function useLending() {
         setTx({ status: "success", hash: repayTx.transaction_hash, message: "Repay confirmed!" });
         await refresh();
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Repay failed";
-        setTx({ status: "error", hash: null, message: msg });
+        setTx({ status: "error", hash: null, message: toUserFriendlyError(err) || "Repay failed" });
       }
     },
     [account, contracts, provider, refresh],

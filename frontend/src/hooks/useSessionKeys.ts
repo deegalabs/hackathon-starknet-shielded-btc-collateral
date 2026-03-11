@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { cairo, ec, stark } from "starknet";
 import { useWallet } from "@/context/WalletContext";
-import { waitTx, extractU256 } from "@/lib/tx";
+import { waitTx, extractU256, toUserFriendlyError } from "@/lib/tx";
 import { shortAddr } from "@/lib/config";
 import type { TxState } from "./useVault";
 
@@ -54,8 +54,7 @@ export function useSessionKeys() {
         });
         return true;
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Registration failed";
-        setTx({ status: "error", hash: null, message: msg });
+        setTx({ status: "error", hash: null, message: toUserFriendlyError(err) || "Registration failed" });
         return false;
       }
     },
@@ -71,8 +70,7 @@ export function useSessionKeys() {
         await waitTx(provider, revokeTx.transaction_hash);
         setTx({ status: "success", hash: revokeTx.transaction_hash, message: "Session key revoked!" });
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Revocation failed";
-        setTx({ status: "error", hash: null, message: msg });
+        setTx({ status: "error", hash: null, message: toUserFriendlyError(err) || "Revocation failed" });
       }
     },
     [account, contracts, provider],

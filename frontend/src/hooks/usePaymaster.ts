@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { cairo } from "starknet";
 import { useWallet } from "@/context/WalletContext";
-import { waitTx, extractU256 } from "@/lib/tx";
+import { waitTx, extractU256, toUserFriendlyError } from "@/lib/tx";
 import type { TxState } from "./useVault";
 
 export interface PaymasterState {
@@ -70,8 +70,7 @@ export function usePaymaster() {
         setTx({ status: "success", hash: fundTx.transaction_hash, message: "Budget funded!" });
         await refresh();
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Fund budget failed";
-        setTx({ status: "error", hash: null, message: msg });
+        setTx({ status: "error", hash: null, message: toUserFriendlyError(err) || "Fund budget failed" });
       }
     },
     [account, contracts, provider, refresh],

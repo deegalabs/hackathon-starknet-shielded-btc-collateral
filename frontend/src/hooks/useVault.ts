@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { cairo, type RpcProvider } from "starknet";
 import { useWallet } from "@/context/WalletContext";
-import { waitTx } from "@/lib/tx";
+import { waitTx, toUserFriendlyError } from "@/lib/tx";
 
 const WAIT_OPTIONS = { retryInterval: 4000, successStates: ["ACCEPTED_ON_L2", "ACCEPTED_ON_L1"] as const };
 const WAIT_TIMEOUT_MS = 300_000; // 5 min (Sepolia can be slow)
@@ -126,8 +126,7 @@ export function useVault() {
         await waitForTxWithTimeout(provider, approveTx.transaction_hash, waitTx);
         setTx({ status: "pending_step2", hash: null, message: "Step 1 done. Click below to confirm deposit (Step 2)." });
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Deposit failed";
-        setTx({ status: "error", hash: null, message: msg });
+        setTx({ status: "error", hash: null, message: toUserFriendlyError(err) || "Deposit failed" });
       }
     },
     [account, contracts, provider],
@@ -151,8 +150,7 @@ export function useVault() {
         setTx({ status: "success", hash: depositTx.transaction_hash, message: "Deposit confirmed!" });
         await refresh();
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Deposit failed";
-        setTx({ status: "error", hash: null, message: msg });
+        setTx({ status: "error", hash: null, message: toUserFriendlyError(err) || "Deposit failed" });
       }
     },
     [account, contracts, provider, refresh],
@@ -191,8 +189,7 @@ export function useVault() {
         setTx({ status: "success", hash: withdrawTx.transaction_hash, message: "Withdrawal confirmed!" });
         await refresh();
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Withdrawal failed";
-        setTx({ status: "error", hash: null, message: msg });
+        setTx({ status: "error", hash: null, message: toUserFriendlyError(err) || "Withdrawal failed" });
       }
     },
     [account, contracts, provider, refresh],
