@@ -105,15 +105,11 @@ export function useVault() {
         await waitTx(provider, approveTx.transaction_hash);
         setTx({ status: "pending", hash: null, message: "Step 2/2 — Confirm deposit in wallet..." });
 
-        // Second tx: use account.execute() directly so the wallet always receives the signing request.
-        // Some extensions don't show the second popup if we use contract.invoke() right after approve.
-        const { low, high } = cairo.uint256(amount);
-        const depositCall = {
-          contractAddress: contracts.vault.address,
-          entrypoint: "deposit",
-          calldata: [low, high, `0x${secret.toString(16)}`, `0x${commitment.toString(16)}`],
-        };
-        const depositTx = await account.execute(depositCall);
+        // On-chain validation: secret + commitment passed so Cairo can verify Poseidon(amount, secret) == commitment
+        const depositTx = await contracts.vault.invoke(
+          "deposit",
+          [cairo.uint256(amount), `0x${secret.toString(16)}`, `0x${commitment.toString(16)}`],
+        );
 
         setTx({ status: "pending", hash: depositTx.transaction_hash, message: "Waiting deposit confirmation..." });
         await waitTx(provider, depositTx.transaction_hash);
