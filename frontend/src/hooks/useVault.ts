@@ -100,9 +100,9 @@ export function useVault() {
           "approve",
           [contracts.vault.address, cairo.uint256(amount)],
         );
-        setTx({ status: "pending", hash: approveTx.transaction_hash, message: "Waiting approve confirmation..." });
+        setTx({ status: "pending", hash: approveTx.transaction_hash, message: "Step 1/2 — Waiting approve confirmation (may take ~1 min on Sepolia)..." });
         await waitTx(provider, approveTx.transaction_hash);
-        setTx({ status: "pending", hash: approveTx.transaction_hash, message: "Depositing — confirm in wallet..." });
+        setTx({ status: "pending", hash: null, message: "Step 2/2 — Confirm deposit in wallet..." });
 
         // On-chain validation: secret + commitment passed so Cairo can verify Poseidon(amount, secret) == commitment
         const depositTx = await contracts.vault.invoke(
