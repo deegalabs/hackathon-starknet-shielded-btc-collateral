@@ -3,6 +3,27 @@ import { cairo } from "starknet";
 import { useWallet } from "@/context/WalletContext";
 import { waitTx } from "@/lib/tx";
 
+const WAIT_OPTIONS = { retryInterval: 4000, successStates: ["ACCEPTED_ON_L2", "ACCEPTED_ON_L1"] as const };
+const WAIT_TIMEOUT_MS = 300_000; // 5 min (Sepolia can be slow)
+
+/** Same as commit 57818d2: provider.waitForTransaction. Fallback to waitTx if RPC is incompatible. */
+async function waitForTxWithTimeout(
+  provider: { waitForTransaction: (hash: string, opts: typeof WAIT_OPTIONS) => Promise<unknown> },
+  hash: string,
+  fallbackWaitTx: (provider: unknown, h: string) => Promise<void>,
+): Promise<void> {
+  try {
+    await Promise.race([
+      provider.waitForTransaction(hash, WAIT_OPTIONS).then(() => {}),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Transaction timed out — check the explorer for status")), WAIT_TIMEOUT_MS),
+      ),
+    ]);
+  } catch (e) {
+    await fallbackWaitTx(provider, hash);
+  }
+}
+
 export interface VaultState {
   commitment: string;
   totalLocked: bigint;
@@ -101,7 +122,7 @@ export function useVault() {
           [contracts.vault.address, cairo.uint256(amount)],
         );
         setTx({ status: "pending", hash: approveTx.transaction_hash, message: "Step 1/2 — Waiting approve confirmation (may take ~1 min on Sepolia)..." });
-        await waitTx(provider, approveTx.transaction_hash);
+        await waitForTxWithTimeout(provider, approveTx.transaction_hash, waitTx);
         setTx({ status: "pending_step2", hash: null, message: "Step 1 done. Click below to confirm deposit (Step 2)." });
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Deposit failed";
@@ -125,7 +146,7 @@ export function useVault() {
           [cairo.uint256(amount), `0x${secret.toString(16)}`, `0x${commitment.toString(16)}`],
         );
         setTx({ status: "pending", hash: depositTx.transaction_hash, message: "Waiting deposit confirmation..." });
-        await waitTx(provider, depositTx.transaction_hash);
+        await waitForTxWithTimeout(provider, depositTx.transaction_hash, waitTx);
         setTx({ status: "success", hash: depositTx.transaction_hash, message: "Deposit confirmed!" });
         await refresh();
       } catch (err) {
